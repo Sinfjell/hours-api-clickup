@@ -13,13 +13,20 @@ ClickUp's API only returns data for 30-day intervals, making it impossible to ge
 
 ## Features
 
-- **Complete Data Coverage**: Fetches all data from 2024 to present
-- **Rate Limiting**: Includes delays to respect API limits
-- **Error Handling**: Continues processing even if individual months fail
-- **BigQuery Integration**: Automatically uploads data to Google BigQuery
-- **Data Transformation**: Converts timestamps, calculates duration in hours, handles timezones
-- **Upsert Logic**: Uses MERGE statements to update existing records or insert new ones
-- **Schema Compliance**: Matches your exact BigQuery table schema
+- **Two Operation Modes**: 
+  - `refresh`: Fetch only recent data (last N days) with windowed delete
+  - `full_reindex`: Fetch all data from 2024 to present
+- **30-Day Chunking**: Respects ClickUp's API limitations with strict 30-day windows
+- **Robust HTTP Handling**: Exponential backoff retry logic for 429/5xx errors
+- **Rate Limiting**: Built-in delays to respect API limits
+- **Environment Configuration**: Secure credential management via .env file
+- **CLI Interface**: Command-line arguments for all configuration options
+- **BigQuery Integration**: Automatic upload with proper data transformations
+- **Advanced MERGE Logic**: 
+  - Refresh mode: Windowed delete for recent data only
+  - Full reindex: Complete data replacement
+- **Data Deduplication**: Keeps latest entry per ID based on timestamp
+- **Comprehensive Logging**: Detailed progress and error reporting
 
 ## Setup
 
@@ -33,24 +40,65 @@ pip install -r requirements.txt
 gcloud auth application-default login
 ```
 
-3. **Update configuration in `fetch_clickup_data.py`:**
-   - `API_TOKEN`: Your ClickUp API token
-   - `TEAM_ID`: Your ClickUp team ID
-   - `ASSIGNEES`: Comma-separated list of user IDs
+3. **Set up environment variables:**
+   ```bash
+   # Copy the example file
+   cp .env.example .env
+   
+   # Edit .env with your actual values
+   CLICKUP_TOKEN=your_clickup_token
+   TEAM_ID=your_team_id
+   ASSIGNEES=assignee_id_1,assignee_id_2
+   ```
 
 ## Usage
 
-Run the script:
+### Basic Usage
+
+**Refresh mode (recommended for regular sync):**
 ```bash
-python fetch_clickup_data.py
+python fetch_clickup_data.py --mode refresh --days 60
 ```
 
-This will:
-- Fetch all time entries from January 2024 to present
-- Create `clickup_time_entries.csv` with all 28 columns
-- Upload to BigQuery staging table (`staging_time_entries`)
-- Merge into fact table (`fact_time_entries`)
-- Clean up temporary files
+**Full reindex mode (for initial setup or complete refresh):**
+```bash
+python fetch_clickup_data.py --mode full_reindex
+```
+
+### Advanced Usage
+
+**Custom BigQuery settings:**
+```bash
+python fetch_clickup_data.py --mode refresh \
+  --project_id my-project \
+  --dataset my_dataset \
+  --staging_table my_staging \
+  --fact_table my_fact
+```
+
+**Custom date range for refresh:**
+```bash
+python fetch_clickup_data.py --mode refresh --days 30
+```
+
+### What the script does:
+- Fetches time entries using 30-day chunks (respects ClickUp API limits)
+- Creates timestamped CSV files for backup
+- Uploads data to BigQuery staging table
+- Executes MERGE operation to update fact table
+
+## CLI Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--mode` | `refresh` | Operation mode: `refresh` or `full_reindex` |
+| `--days` | `60` | Number of days to fetch in refresh mode |
+| `--project_id` | `nettsmed-internal` | BigQuery project ID |
+| `--dataset` | `clickup_data` | BigQuery dataset name |
+| `--staging_table` | `staging_time_entries` | BigQuery staging table name |
+| `--fact_table` | `fact_time_entries` | BigQuery fact table name |
+
+All arguments can also be set via environment variables in `.env` file.
 
 ## BigQuery Integration
 
