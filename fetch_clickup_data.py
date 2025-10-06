@@ -374,8 +374,7 @@ class BigQueryManager:
         df_upload['task_status_orderindex'] = df_upload['task_status_orderindex'].astype('Int64')
         
         job_config = bigquery.LoadJobConfig(
-            write_disposition="WRITE_TRUNCATE",
-            schema_update_options=[bigquery.SchemaUpdateOption.ALLOW_FIELD_ADDITION]
+            write_disposition="WRITE_TRUNCATE"
         )
         
         job = self.client.load_table_from_dataframe(df_upload, table_id, job_config=job_config)
