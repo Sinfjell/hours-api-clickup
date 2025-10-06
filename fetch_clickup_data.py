@@ -177,10 +177,10 @@ class DataTransformer:
         try:
             # Extract basic fields
             entry_id = str(entry.get('id', ''))
-            start_ms = entry.get('start', 0)
-            end_ms = entry.get('end', 0)
-            duration_ms = entry.get('duration', 0)
-            at_ms = entry.get('at', 0)
+            start_ms = DataTransformer.safe_int(entry.get('start', 0))
+            end_ms = DataTransformer.safe_int(entry.get('end', 0))
+            duration_ms = DataTransformer.safe_int(entry.get('duration', 0))
+            at_ms = DataTransformer.safe_int(entry.get('at', 0))
             
             # Convert timestamps
             start_utc = pd.to_datetime(start_ms, unit='ms', utc=True) if start_ms else None
