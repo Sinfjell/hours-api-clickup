@@ -148,6 +148,36 @@ def sync_tasks():
         }), 500
 
 
+@app.route('/sync/accounts', methods=['POST'])
+def sync_accounts():
+    """
+    Sync ClickUp accounts to BigQuery.
+    
+    This endpoint fetches Account tasks from the configured ClickUp list
+    with custom fields (Connected List IDs, Hours Discount, ARR) and
+    uploads them to BigQuery.
+    """
+    try:
+        logger.info("Starting accounts sync...")
+        
+        # Import and run sync function
+        from fetch_clickup_data import sync_accounts_to_bigquery
+        sync_accounts_to_bigquery()
+        
+        logger.info("Accounts sync completed successfully")
+        return jsonify({
+            'status': 'success',
+            'message': 'ClickUp accounts sync completed successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Accounts sync failed: {e}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """
@@ -194,6 +224,11 @@ def root():
                 'description': 'Sync all ClickUp tasks (open, closed, archived, subtasks)',
                 'use_case': 'Update task metadata (run when tasks change)'
             },
+            '/sync/accounts': {
+                'method': 'POST',
+                'description': 'Sync ClickUp accounts with custom fields (Connected Lists, Hours Discount, ARR)',
+                'use_case': 'Update account/customer metadata'
+            },
             '/health': {
                 'method': 'GET',
                 'description': 'Health check endpoint',
@@ -204,7 +239,8 @@ def root():
             'refresh': 'Every 6 hours',
             'full_reindex': 'Quarterly (Jan 1, Apr 1, Jul 1, Oct 1)',
             'lists': 'Daily at 3 AM (Oslo time)',
-            'tasks': 'Daily at 4 AM (Oslo time)'
+            'tasks': 'Daily at 4 AM (Oslo time)',
+            'accounts': 'Daily at 5 AM (Oslo time)'
         }
     }), 200
 
