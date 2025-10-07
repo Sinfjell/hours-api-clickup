@@ -34,6 +34,12 @@ ClickUp's API only returns data for 30-day intervals, making it impossible to ge
 - **Pagination**: Handles large lists with proper pagination (100 tasks per page)
 - **Complete Replacement**: Each sync replaces all data with current state
 
+### Accounts
+- **Custom Fields**: Extracts Connected List IDs, Hours Discount, and ARR
+- **Multiple Rows**: Creates one row per connected list ID for each account
+- **From Specific List**: Fetches from configured accounts list (default: 901506402026)
+- **Complete Replacement**: Each sync replaces all data with current state
+
 ### General
 - **Robust HTTP Handling**: Exponential backoff retry logic for 429/5xx errors
 - **Rate Limiting**: Built-in delays to respect API limits
@@ -91,7 +97,12 @@ curl -X POST https://your-service-url/sync/lists
 curl -X POST https://your-service-url/sync/tasks
 ```
 
-**Note:** Lists and tasks are automatically synced daily (3 AM and 4 AM Oslo time respectively) via Cloud Scheduler.
+**Sync ClickUp accounts:**
+```bash
+curl -X POST https://your-service-url/sync/accounts
+```
+
+**Note:** Lists, tasks, and accounts are automatically synced daily (3 AM, 4 AM, and 5 AM Oslo time respectively) via Cloud Scheduler.
 
 **Health check:**
 ```bash
@@ -152,6 +163,7 @@ All arguments can also be set via environment variables in `.env` file.
 - **Time Entries Fact**: `nettsmed-internal.clickup_data.fact_time_entries`
 - **Lists Dimension**: `nettsmed-internal.clickup_data.dim_lists`
 - **Tasks Dimension**: `nettsmed-internal.clickup_data.dim_tasks`
+- **Accounts Dimension**: `nettsmed-internal.clickup_data.dim_accounts`
 
 ### Data Transformations
 - **Timestamps**: Converted from milliseconds to UTC timestamps
@@ -192,6 +204,16 @@ All arguments can also be set via environment variables in `.env` file.
 - `url`: ClickUp task URL (STRING)
 - `closed`: Whether task is closed (BOOLEAN)
 - `archived`: Whether task is archived (BOOLEAN)
+
+**Accounts Table:**
+- `account_task_id`: Account task ID (STRING, REQUIRED)
+- `account_name`: Account/customer name (STRING)
+- `connected_list_id`: Connected ClickUp list ID (STRING)
+- `hours_discount`: Discount percentage for hours (FLOAT)
+- `status`: Account status (STRING)
+- `date_created`: When account was created (TIMESTAMP)
+- `assignees`: Assigned users (STRING)
+- `arr`: Annual Recurring Revenue (FLOAT)
 
 ## Output
 

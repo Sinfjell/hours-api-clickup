@@ -368,6 +368,163 @@ class ClickUpTasksFetcher:
                 break
         
         return tasks
+
+
+class ClickUpAccountsFetcher:
+    """Fetches Account tasks from a specific ClickUp list with custom fields."""
+    
+    def __init__(self, token: str, list_id: str, 
+                 connected_cf_id: str, hours_discount_cf_id: str, arr_cf_id: str):
+        self.token = token
+        self.list_id = list_id
+        self.connected_cf_id = connected_cf_id
+        self.hours_discount_cf_id = hours_discount_cf_id
+        self.arr_cf_id = arr_cf_id
+        self.base_url = "https://api.clickup.com/api/v2"
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': token,
+            'Content-Type': 'application/json'
+        })
+    
+    def _make_request(self, url: str, max_retries: int = 3) -> Dict[str, Any]:
+        """Make HTTP request with exponential backoff retry logic."""
+        for attempt in range(max_retries + 1):
+            try:
+                response = self.session.get(url, timeout=30)
+                
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                elif response.status_code >= 500:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Server error {response.status_code}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    response.raise_for_status()
+                    
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    logger.error(f"Request failed after {max_retries + 1} attempts: {e}")
+                    raise
+                wait_time = 2 ** attempt
+                logger.warning(f"Request failed: {e}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                time.sleep(wait_time)
+        
+        raise Exception(f"Request failed after {max_retries + 1} attempts")
+    
+    def fetch_all_accounts(self) -> List[Dict[str, Any]]:
+        """
+        Fetch all Account tasks from the specified list with custom fields.
+        
+        Returns a list of dictionaries, with one row per connected list ID.
+        """
+        all_accounts = []
+        page = 0
+        
+        try:
+            logger.info(f"Fetching accounts from list {self.list_id}...")
+            
+            while True:
+                time.sleep(0.3)  # Rate limiting
+                
+                url = (
+                    f"{self.base_url}/list/{self.list_id}/task"
+                    f"?archived=false&include_closed=true&subtasks=true&page={page}"
+                )
+                
+                data = self._make_request(url)
+                tasks = data.get('tasks', [])
+                
+                if not tasks:
+                    break
+                
+                logger.info(f"Fetched page {page}: {len(tasks)} account tasks")
+                
+                # Process each task
+                for task in tasks:
+                    # Build lookup for custom fields
+                    fields_by_id = {}
+                    for field in task.get('custom_fields', []):
+                        fields_by_id[field.get('id')] = field
+                    
+                    # Extract custom field values
+                    # Connected List IDs (comma-separated text)
+                    connected_field = fields_by_id.get(self.connected_cf_id, {})
+                    connected_value = connected_field.get('value', '')
+                    if connected_value:
+                        connected_list_ids = [lid.strip() for lid in connected_value.split(',') if lid.strip()]
+                    else:
+                        connected_list_ids = ['']  # At least one row even if empty
+                    
+                    # Hours Discount (numeric, default 0)
+                    hours_field = fields_by_id.get(self.hours_discount_cf_id, {})
+                    hours_discount = hours_field.get('value')
+                    if hours_discount is not None:
+                        try:
+                            hours_discount = float(hours_discount)
+                        except (ValueError, TypeError):
+                            hours_discount = 0.0
+                    else:
+                        hours_discount = 0.0
+                    
+                    # ARR (numeric/currency)
+                    arr_field = fields_by_id.get(self.arr_cf_id, {})
+                    arr_value = arr_field.get('value')
+                    if arr_value is not None and not isinstance(arr_value, str):
+                        try:
+                            arr_value = float(arr_value)
+                        except (ValueError, TypeError):
+                            arr_value = None
+                    
+                    # Base data for the task
+                    task_id = str(task.get('id', ''))
+                    task_name = task.get('name', '')
+                    status = task.get('status', {}).get('status', '')
+                    date_created = task.get('date_created')
+                    
+                    # Convert date_created to datetime
+                    date_created_dt = None
+                    if date_created:
+                        try:
+                            date_created_dt = pd.to_datetime(int(date_created), unit='ms', utc=True)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Assignees
+                    assignees = task.get('assignees', [])
+                    assignee_names = ', '.join([a.get('username', '') for a in assignees])
+                    
+                    # Create one row per connected list ID
+                    for connected_list_id in connected_list_ids:
+                        all_accounts.append({
+                            'account_task_id': task_id,
+                            'account_name': task_name,
+                            'connected_list_id': connected_list_id,
+                            'hours_discount': hours_discount,
+                            'status': status,
+                            'date_created': date_created_dt,
+                            'assignees': assignee_names,
+                            'arr': arr_value
+                        })
+                
+                page += 1
+                
+                # Break if we got less than 100 tasks (last page)
+                if len(tasks) < 100:
+                    break
+            
+            logger.info(f"Total account rows fetched: {len(all_accounts)}")
+            return all_accounts
+            
+        except Exception as e:
+            logger.error(f"Error fetching ClickUp accounts: {e}")
+            raise
     
     def fetch_time_entries_30day_chunk(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Fetch time entries for a 30-day chunk respecting ClickUp's API limitations."""
@@ -699,6 +856,64 @@ class BigQueryTasksManager:
         job.result()  # Wait for job to complete
         
         logger.info(f"Uploaded {len(df)} tasks to {table_id}")
+
+
+class BigQueryAccountsManager:
+    """Manages BigQuery operations for ClickUp accounts data."""
+    
+    def __init__(self, project_id: str, dataset: str, accounts_table: str):
+        self.project_id = project_id
+        self.dataset = dataset
+        self.accounts_table = accounts_table
+        self.client = bigquery.Client(project=project_id)
+    
+    def ensure_dataset_exists(self):
+        """Ensure the dataset exists."""
+        dataset_id = f"{self.project_id}.{self.dataset}"
+        try:
+            self.client.get_dataset(dataset_id)
+            logger.info(f"Dataset {dataset_id} already exists")
+        except NotFound:
+            dataset = bigquery.Dataset(dataset_id)
+            dataset.location = "US"
+            dataset = self.client.create_dataset(dataset, timeout=30)
+            logger.info(f"Created dataset {dataset_id}")
+    
+    def create_accounts_table_if_not_exists(self):
+        """Create accounts table if it doesn't exist."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.accounts_table}"
+        
+        try:
+            self.client.get_table(table_id)
+            logger.info(f"Accounts table {table_id} already exists")
+        except NotFound:
+            schema = [
+                bigquery.SchemaField("account_task_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("account_name", "STRING"),
+                bigquery.SchemaField("connected_list_id", "STRING"),
+                bigquery.SchemaField("hours_discount", "FLOAT"),
+                bigquery.SchemaField("status", "STRING"),
+                bigquery.SchemaField("date_created", "TIMESTAMP"),
+                bigquery.SchemaField("assignees", "STRING"),
+                bigquery.SchemaField("arr", "FLOAT"),
+            ]
+            
+            table = bigquery.Table(table_id, schema=schema)
+            table = self.client.create_table(table)
+            logger.info(f"Created accounts table {table_id}")
+    
+    def upload_accounts(self, df: pd.DataFrame):
+        """Upload accounts DataFrame to BigQuery, replacing all existing data."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.accounts_table}"
+        
+        job_config = bigquery.LoadJobConfig(
+            write_disposition="WRITE_TRUNCATE"  # Replace all data
+        )
+        
+        job = self.client.load_table_from_dataframe(df, table_id, job_config=job_config)
+        job.result()  # Wait for job to complete
+        
+        logger.info(f"Uploaded {len(df)} account rows to {table_id}")
 
 
 class BigQueryManager:
@@ -1048,6 +1263,64 @@ def sync_tasks_to_bigquery():
         
     except Exception as e:
         logger.error(f"Tasks sync failed: {e}")
+        sys.exit(1)
+
+
+def sync_accounts_to_bigquery():
+    """Fetch ClickUp accounts and sync to BigQuery."""
+    clickup_token = os.getenv('CLICKUP_TOKEN')
+    list_id = os.getenv('ACCOUNTS_LIST_ID', '901506402026')
+    connected_cf_id = os.getenv('CONNECTED_CF_ID', '00aeeab8-926e-4c46-8299-99f973287b6e')
+    hours_discount_cf_id = os.getenv('HOURS_DISCOUNT_CF_ID', '2617cb32-785f-48ba-974a-1468c66e9166')
+    arr_cf_id = os.getenv('ARR_CF_ID', '93ed8859-06ad-4909-938c-70b6f4c8352a')
+    project_id = os.getenv('PROJECT_ID', 'nettsmed-internal')
+    dataset = os.getenv('DATASET', 'clickup_data')
+    accounts_table = os.getenv('ACCOUNTS_TABLE', 'dim_accounts')
+    
+    if not clickup_token:
+        logger.error("CLICKUP_TOKEN environment variable is required")
+        sys.exit(1)
+    
+    logger.info("Starting ClickUp accounts sync to BigQuery")
+    logger.info(f"Project: {project_id}, Dataset: {dataset}, Table: {accounts_table}")
+    logger.info(f"List ID: {list_id}")
+    
+    try:
+        # Initialize components
+        fetcher = ClickUpAccountsFetcher(
+            clickup_token, list_id,
+            connected_cf_id, hours_discount_cf_id, arr_cf_id
+        )
+        bq_manager = BigQueryAccountsManager(project_id, dataset, accounts_table)
+        
+        # Fetch accounts
+        logger.info("Fetching accounts from ClickUp...")
+        accounts_data = fetcher.fetch_all_accounts()
+        
+        if not accounts_data:
+            logger.warning("No accounts found")
+            return
+        
+        # Create DataFrame
+        df = pd.DataFrame(accounts_data)
+        
+        # Save CSV for backup
+        csv_filename = f"clickup_accounts_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        df.to_csv(csv_filename, index=False)
+        logger.info(f"Saved {len(df)} account rows to {csv_filename}")
+        
+        # BigQuery operations
+        logger.info("Setting up BigQuery...")
+        bq_manager.ensure_dataset_exists()
+        bq_manager.create_accounts_table_if_not_exists()
+        
+        logger.info("Uploading accounts to BigQuery...")
+        bq_manager.upload_accounts(df)
+        
+        logger.info("Accounts sync completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Accounts sync failed: {e}")
         sys.exit(1)
 
 
