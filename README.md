@@ -1,6 +1,6 @@
-# ClickUp Time Entries to BigQuery Pipeline
+# ClickUp to BigQuery Pipeline
 
-A Python script that fetches all time entries from ClickUp API and automatically uploads them to Google BigQuery with proper data transformations and upsert logic.
+A Python service that fetches ClickUp time entries and lists from ClickUp API and automatically uploads them to Google BigQuery with proper data transformations and upsert logic.
 
 ## Problem Solved
 
@@ -13,19 +13,33 @@ ClickUp's API only returns data for 30-day intervals, making it impossible to ge
 
 ## Features
 
+### Time Entries
 - **Two Operation Modes**: 
   - `refresh`: Fetch only recent data (last N days) with windowed delete
   - `full_reindex`: Fetch all data from 2024 to present
 - **30-Day Chunking**: Respects ClickUp's API limitations with strict 30-day windows
+- **Advanced MERGE Logic**: 
+  - Refresh mode: Windowed delete for recent data only
+  - Full reindex: Complete data replacement
+- **Data Deduplication**: Keeps latest entry per ID based on timestamp
+
+### Lists
+- **Full Hierarchy**: Fetches complete Space → Folder → List structure
+- **Folder-less Lists**: Handles lists directly under spaces
+- **Complete Replacement**: Each sync replaces all data with current state
+
+### Tasks
+- **All Task Types**: Fetches open, closed, and archived tasks
+- **Includes Subtasks**: Fetches subtasks along with parent tasks
+- **Pagination**: Handles large lists with proper pagination (100 tasks per page)
+- **Complete Replacement**: Each sync replaces all data with current state
+
+### General
 - **Robust HTTP Handling**: Exponential backoff retry logic for 429/5xx errors
 - **Rate Limiting**: Built-in delays to respect API limits
 - **Environment Configuration**: Secure credential management via .env file
 - **CLI Interface**: Command-line arguments for all configuration options
 - **BigQuery Integration**: Automatic upload with proper data transformations
-- **Advanced MERGE Logic**: 
-  - Refresh mode: Windowed delete for recent data only
-  - Full reindex: Complete data replacement
-- **Data Deduplication**: Keeps latest entry per ID based on timestamp
 - **Comprehensive Logging**: Detailed progress and error reporting
 
 ## Setup
@@ -53,7 +67,38 @@ gcloud auth application-default login
 
 ## Usage
 
-### Basic Usage
+### Cloud Run API Endpoints
+
+The service is deployed on Google Cloud Run and provides HTTP endpoints:
+
+**Sync time entries (last 60 days):**
+```bash
+curl -X POST https://your-service-url/sync/refresh
+```
+
+**Full reindex of time entries:**
+```bash
+curl -X POST https://your-service-url/sync/full_reindex
+```
+
+**Sync ClickUp lists:**
+```bash
+curl -X POST https://your-service-url/sync/lists
+```
+
+**Sync ClickUp tasks:**
+```bash
+curl -X POST https://your-service-url/sync/tasks
+```
+
+**Note:** Lists and tasks are automatically synced daily (3 AM and 4 AM Oslo time respectively) via Cloud Scheduler.
+
+**Health check:**
+```bash
+curl https://your-service-url/health
+```
+
+### Local CLI Usage
 
 **Refresh mode (recommended for regular sync):**
 ```bash
@@ -103,8 +148,10 @@ All arguments can also be set via environment variables in `.env` file.
 ## BigQuery Integration
 
 ### Tables Created
-- **Staging Table**: `nettsmed-internal.clickup_data.staging_time_entries`
-- **Fact Table**: `nettsmed-internal.clickup_data.fact_time_entries`
+- **Time Entries Staging**: `nettsmed-internal.clickup_data.staging_time_entries`
+- **Time Entries Fact**: `nettsmed-internal.clickup_data.fact_time_entries`
+- **Lists Dimension**: `nettsmed-internal.clickup_data.dim_lists`
+- **Tasks Dimension**: `nettsmed-internal.clickup_data.dim_tasks`
 
 ### Data Transformations
 - **Timestamps**: Converted from milliseconds to UTC timestamps
@@ -113,7 +160,8 @@ All arguments can also be set via environment variables in `.env` file.
 - **Upsert Logic**: Uses `id` as primary key for MERGE operations
 
 ### Schema
-The BigQuery tables include all CSV columns plus:
+
+**Time Entries Tables:**
 - `start_utc`: Start time as UTC timestamp
 - `end_utc`: End time as UTC timestamp  
 - `at`: Last updated as UTC timestamp
@@ -121,6 +169,29 @@ The BigQuery tables include all CSV columns plus:
 - `duration_hours`: Duration in hours (float)
 - `duration_ms`: Duration in milliseconds (integer)
 - `user_email_sha256`: SHA256 hash of user email
+
+**Lists Table:**
+- `space_id`: Space ID (STRING, REQUIRED)
+- `space_name`: Space name (STRING, REQUIRED)
+- `folder_id`: Folder ID (STRING, empty if folder-less)
+- `folder_name`: Folder name (STRING, empty if folder-less)
+- `list_id`: List ID (STRING, REQUIRED)
+- `list_name`: List name (STRING, REQUIRED)
+
+**Tasks Table:**
+- `space_id`: Space ID (STRING, REQUIRED)
+- `space_name`: Space name (STRING, REQUIRED)
+- `folder_id`: Folder ID (STRING, empty if folder-less)
+- `folder_name`: Folder name (STRING, empty if folder-less)
+- `list_id`: List ID (STRING, REQUIRED)
+- `list_name`: List name (STRING, REQUIRED)
+- `task_id`: Task ID (STRING, REQUIRED)
+- `task_name`: Task name (STRING)
+- `status`: Task status (STRING)
+- `time_estimate_hrs`: Estimated hours (FLOAT)
+- `url`: ClickUp task URL (STRING)
+- `closed`: Whether task is closed (BOOLEAN)
+- `archived`: Whether task is archived (BOOLEAN)
 
 ## Output
 

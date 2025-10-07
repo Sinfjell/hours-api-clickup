@@ -87,6 +87,30 @@ gcloud scheduler jobs create http clickup-full-reindex-quarterly \
     --description="Full reindex of all ClickUp data (quarterly at 2 AM on 1st)" \
     2>/dev/null || echo "  ✓ Full reindex scheduler already exists"
 
+# Scheduler 3: Daily lists sync
+echo "  Creating lists sync scheduler (daily)..."
+gcloud scheduler jobs create http clickup-lists-sync-daily \
+    --location=$SCHEDULER_REGION \
+    --schedule="0 3 * * *" \
+    --uri="${SERVICE_URL}/sync/lists" \
+    --http-method=POST \
+    --oidc-service-account-email=clickup-scheduler@${PROJECT_ID}.iam.gserviceaccount.com \
+    --time-zone="Europe/Oslo" \
+    --description="Sync ClickUp lists daily at 3 AM" \
+    2>/dev/null || echo "  ✓ Lists sync scheduler already exists"
+
+# Scheduler 4: Daily tasks sync
+echo "  Creating tasks sync scheduler (daily)..."
+gcloud scheduler jobs create http clickup-tasks-sync-daily \
+    --location=$SCHEDULER_REGION \
+    --schedule="0 4 * * *" \
+    --uri="${SERVICE_URL}/sync/tasks" \
+    --http-method=POST \
+    --oidc-service-account-email=clickup-scheduler@${PROJECT_ID}.iam.gserviceaccount.com \
+    --time-zone="Europe/Oslo" \
+    --description="Sync ClickUp tasks daily at 4 AM" \
+    2>/dev/null || echo "  ✓ Tasks sync scheduler already exists"
+
 echo ""
 echo "🎉 Deployment Complete!"
 echo "=================================================="
@@ -95,14 +119,20 @@ echo ""
 echo "Endpoints:"
 echo "  - POST $SERVICE_URL/sync/refresh"
 echo "  - POST $SERVICE_URL/sync/full_reindex"
+echo "  - POST $SERVICE_URL/sync/lists"
+echo "  - POST $SERVICE_URL/sync/tasks"
 echo "  - GET  $SERVICE_URL/health"
 echo ""
 echo "Schedulers:"
 echo "  - Every 6 hours: clickup-refresh-6h"
 echo "  - Quarterly (Jan/Apr/Jul/Oct 1st at 2 AM): clickup-full-reindex-quarterly"
+echo "  - Daily at 3 AM: clickup-lists-sync-daily"
+echo "  - Daily at 4 AM: clickup-tasks-sync-daily"
 echo ""
 echo "📊 Test the service:"
 echo "  gcloud scheduler jobs run clickup-refresh-6h --location=$SCHEDULER_REGION"
+echo "  gcloud scheduler jobs run clickup-lists-sync-daily --location=$SCHEDULER_REGION"
+echo "  gcloud scheduler jobs run clickup-tasks-sync-daily --location=$SCHEDULER_REGION"
 echo ""
 echo "📝 View logs:"
 echo "  gcloud run services logs read $SERVICE_NAME --region=$REGION --limit=50"

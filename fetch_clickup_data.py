@@ -50,12 +50,26 @@ class ClickUpDataFetcher:
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         })
-        
-    def _make_request(self, url: str, params: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+
+
+class ClickUpListsFetcher:
+    """Fetches lists from ClickUp API with Space → Folder → List hierarchy."""
+    
+    def __init__(self, token: str, team_id: str):
+        self.token = token
+        self.team_id = team_id
+        self.base_url = "https://api.clickup.com/api/v2"
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': token,  # Token should already include "Bearer" prefix if needed
+            'Content-Type': 'application/json'
+        })
+    
+    def _make_request(self, url: str, max_retries: int = 3) -> Dict[str, Any]:
         """Make HTTP request with exponential backoff retry logic."""
         for attempt in range(max_retries + 1):
             try:
-                response = self.session.get(url, params=params, timeout=30)
+                response = self.session.get(url, timeout=30)
                 
                 if response.status_code == 200:
                     return response.json()
@@ -83,6 +97,277 @@ class ClickUpDataFetcher:
                 time.sleep(wait_time)
         
         raise Exception(f"Request failed after {max_retries + 1} attempts")
+    
+    def fetch_all_lists(self) -> List[Dict[str, Any]]:
+        """
+        Fetch all ClickUp lists in Team with Space → Folder → List hierarchy.
+        
+        Returns a list of dictionaries with the following structure:
+        {
+            'space_id': str,
+            'space_name': str,
+            'folder_id': str (empty string if folder-less),
+            'folder_name': str (empty string if folder-less),
+            'list_id': str,
+            'list_name': str
+        }
+        """
+        all_lists = []
+        
+        try:
+            # 1. Fetch all spaces in the team
+            logger.info(f"Fetching spaces for team {self.team_id}...")
+            spaces_url = f"{self.base_url}/team/{self.team_id}/space?archived=false"
+            spaces_data = self._make_request(spaces_url)
+            spaces = spaces_data.get('spaces', [])
+            logger.info(f"Found {len(spaces)} spaces")
+            
+            for space in spaces:
+                space_id = str(space.get('id', ''))
+                space_name = space.get('name', '')
+                
+                time.sleep(0.2)  # Small delay to respect rate limits
+                
+                # 2a. Fetch folders in each space
+                logger.info(f"Fetching folders for space: {space_name}")
+                folders_url = f"{self.base_url}/space/{space_id}/folder?archived=false"
+                folders_data = self._make_request(folders_url)
+                folders = folders_data.get('folders', [])
+                logger.info(f"Found {len(folders)} folders in space: {space_name}")
+                
+                # 3. Fetch lists in each folder
+                for folder in folders:
+                    folder_id = str(folder.get('id', ''))
+                    folder_name = folder.get('name', '')
+                    
+                    time.sleep(0.2)
+                    
+                    logger.info(f"Fetching lists for folder: {folder_name}")
+                    lists_url = f"{self.base_url}/folder/{folder_id}/list?archived=false"
+                    lists_data = self._make_request(lists_url)
+                    lists = lists_data.get('lists', [])
+                    
+                    for list_item in lists:
+                        all_lists.append({
+                            'space_id': space_id,
+                            'space_name': space_name,
+                            'folder_id': folder_id,
+                            'folder_name': folder_name,
+                            'list_id': str(list_item.get('id', '')),
+                            'list_name': list_item.get('name', '')
+                        })
+                
+                # 2b. Fetch folder-less lists (lists directly under space)
+                time.sleep(0.2)
+                
+                logger.info(f"Fetching folder-less lists for space: {space_name}")
+                root_lists_url = f"{self.base_url}/space/{space_id}/list?archived=false"
+                root_lists_data = self._make_request(root_lists_url)
+                root_lists = root_lists_data.get('lists', [])
+                logger.info(f"Found {len(root_lists)} folder-less lists in space: {space_name}")
+                
+                for list_item in root_lists:
+                    all_lists.append({
+                        'space_id': space_id,
+                        'space_name': space_name,
+                        'folder_id': '',
+                        'folder_name': '',
+                        'list_id': str(list_item.get('id', '')),
+                        'list_name': list_item.get('name', '')
+                    })
+            
+            logger.info(f"Total lists fetched: {len(all_lists)}")
+            return all_lists
+            
+        except Exception as e:
+            logger.error(f"Error fetching ClickUp lists: {e}")
+            raise
+
+
+class ClickUpTasksFetcher:
+    """Fetches ALL tasks (open, closed, archived, subtasks) from ClickUp Space."""
+    
+    def __init__(self, token: str, space_id: str):
+        self.token = token
+        self.space_id = space_id
+        self.base_url = "https://api.clickup.com/api/v2"
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': token,
+            'Content-Type': 'application/json'
+        })
+    
+    def _make_request(self, url: str, max_retries: int = 3) -> Dict[str, Any]:
+        """Make HTTP request with exponential backoff retry logic."""
+        for attempt in range(max_retries + 1):
+            try:
+                response = self.session.get(url, timeout=30)
+                
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                elif response.status_code >= 500:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Server error {response.status_code}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    response.raise_for_status()
+                    
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    logger.error(f"Request failed after {max_retries + 1} attempts: {e}")
+                    raise
+                wait_time = 2 ** attempt
+                logger.warning(f"Request failed: {e}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                time.sleep(wait_time)
+        
+        raise Exception(f"Request failed after {max_retries + 1} attempts")
+    
+    def fetch_all_tasks(self) -> List[Dict[str, Any]]:
+        """
+        Fetch ALL tasks from ClickUp Space (open, closed, archived, subtasks).
+        
+        Returns a list of dictionaries with task information.
+        """
+        all_tasks = []
+        
+        try:
+            # Get space details
+            logger.info(f"Fetching space details for {self.space_id}...")
+            space_url = f"{self.base_url}/space/{self.space_id}"
+            space_data = self._make_request(space_url)
+            space_id = str(space_data.get('id', ''))
+            space_name = space_data.get('name', '')
+            logger.info(f"Space: {space_name}")
+            
+            # Fetch tasks twice: once for active/closed, once for archived
+            for archived in [False, True]:
+                archived_str = str(archived).lower()
+                logger.info(f"Fetching {'archived' if archived else 'active/closed'} tasks...")
+                
+                # Get folders
+                time.sleep(0.2)
+                folders_url = f"{self.base_url}/space/{self.space_id}/folder?archived={archived_str}"
+                folders_data = self._make_request(folders_url)
+                folders = folders_data.get('folders', [])
+                logger.info(f"Found {len(folders)} {'archived' if archived else 'active'} folders")
+                
+                # Fetch tasks from lists in each folder
+                for folder in folders:
+                    folder_id = str(folder.get('id', ''))
+                    folder_name = folder.get('name', '')
+                    
+                    time.sleep(0.2)
+                    lists_url = f"{self.base_url}/folder/{folder_id}/list?archived={archived_str}"
+                    lists_data = self._make_request(lists_url)
+                    lists = lists_data.get('lists', [])
+                    
+                    for list_item in lists:
+                        list_id = str(list_item.get('id', ''))
+                        list_name = list_item.get('name', '')
+                        
+                        tasks = self._fetch_tasks_from_list(
+                            list_id, archived_str,
+                            space_id, space_name,
+                            folder_id, folder_name,
+                            list_id, list_name
+                        )
+                        all_tasks.extend(tasks)
+                
+                # Fetch tasks from folder-less lists
+                time.sleep(0.2)
+                root_lists_url = f"{self.base_url}/space/{self.space_id}/list?archived={archived_str}"
+                root_lists_data = self._make_request(root_lists_url)
+                root_lists = root_lists_data.get('lists', [])
+                logger.info(f"Found {len(root_lists)} {'archived' if archived else 'active'} folder-less lists")
+                
+                for list_item in root_lists:
+                    list_id = str(list_item.get('id', ''))
+                    list_name = list_item.get('name', '')
+                    
+                    tasks = self._fetch_tasks_from_list(
+                        list_id, archived_str,
+                        space_id, space_name,
+                        '', '',  # no folder
+                        list_id, list_name
+                    )
+                    all_tasks.extend(tasks)
+            
+            logger.info(f"Total tasks fetched: {len(all_tasks)}")
+            return all_tasks
+            
+        except Exception as e:
+            logger.error(f"Error fetching ClickUp tasks: {e}")
+            raise
+    
+    def _fetch_tasks_from_list(
+        self, list_id: str, archived: str,
+        space_id: str, space_name: str,
+        folder_id: str, folder_name: str,
+        list_id_str: str, list_name: str
+    ) -> List[Dict[str, Any]]:
+        """Fetch all tasks from a specific list with pagination."""
+        tasks = []
+        page = 0
+        limit = 100
+        
+        while True:
+            time.sleep(0.3)  # Rate limiting
+            
+            url = (
+                f"{self.base_url}/list/{list_id}/task"
+                f"?page={page}&limit={limit}"
+                f"&include_closed=true&subtasks=true"
+                f"&archived={archived}"
+            )
+            
+            try:
+                data = self._make_request(url)
+                page_tasks = data.get('tasks', [])
+                
+                if not page_tasks:
+                    break
+                
+                for task in page_tasks:
+                    # Calculate estimate in hours
+                    time_estimate_ms = task.get('time_estimate')
+                    time_estimate_hrs = None
+                    if time_estimate_ms:
+                        time_estimate_hrs = round(time_estimate_ms / 1000 / 3600, 2)
+                    
+                    # Determine if closed
+                    status = task.get('status', {})
+                    is_closed = status.get('type') == 'closed'
+                    
+                    tasks.append({
+                        'space_id': space_id,
+                        'space_name': space_name,
+                        'folder_id': folder_id,
+                        'folder_name': folder_name,
+                        'list_id': list_id_str,
+                        'list_name': list_name,
+                        'task_id': str(task.get('id', '')),
+                        'task_name': task.get('name', ''),
+                        'status': status.get('status', ''),
+                        'time_estimate_hrs': time_estimate_hrs,
+                        'url': task.get('url', ''),
+                        'closed': is_closed,
+                        'archived': task.get('archived', False)
+                    })
+                
+                logger.info(f"Fetched page {page} from list '{list_name}': {len(page_tasks)} tasks")
+                page += 1
+                
+            except Exception as e:
+                logger.warning(f"Error fetching tasks from list {list_id}, page {page}: {e}")
+                break
+        
+        return tasks
     
     def fetch_time_entries_30day_chunk(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Fetch time entries for a 30-day chunk respecting ClickUp's API limitations."""
@@ -295,6 +580,125 @@ class DataTransformer:
                 'task_location_space_id': None,
                 'start_date_oslo': None
             }
+
+
+class BigQueryListsManager:
+    """Manages BigQuery operations for ClickUp lists data."""
+    
+    def __init__(self, project_id: str, dataset: str, lists_table: str):
+        self.project_id = project_id
+        self.dataset = dataset
+        self.lists_table = lists_table
+        self.client = bigquery.Client(project=project_id)
+    
+    def ensure_dataset_exists(self):
+        """Ensure the dataset exists."""
+        dataset_id = f"{self.project_id}.{self.dataset}"
+        try:
+            self.client.get_dataset(dataset_id)
+            logger.info(f"Dataset {dataset_id} already exists")
+        except NotFound:
+            dataset = bigquery.Dataset(dataset_id)
+            dataset.location = "US"
+            dataset = self.client.create_dataset(dataset, timeout=30)
+            logger.info(f"Created dataset {dataset_id}")
+    
+    def create_lists_table_if_not_exists(self):
+        """Create lists table if it doesn't exist."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.lists_table}"
+        
+        try:
+            self.client.get_table(table_id)
+            logger.info(f"Lists table {table_id} already exists")
+        except NotFound:
+            schema = [
+                bigquery.SchemaField("space_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("space_name", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("folder_id", "STRING"),
+                bigquery.SchemaField("folder_name", "STRING"),
+                bigquery.SchemaField("list_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("list_name", "STRING", mode="REQUIRED"),
+            ]
+            
+            table = bigquery.Table(table_id, schema=schema)
+            table = self.client.create_table(table)
+            logger.info(f"Created lists table {table_id}")
+    
+    def upload_lists(self, df: pd.DataFrame):
+        """Upload lists DataFrame to BigQuery, replacing all existing data."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.lists_table}"
+        
+        job_config = bigquery.LoadJobConfig(
+            write_disposition="WRITE_TRUNCATE"  # Replace all data
+        )
+        
+        job = self.client.load_table_from_dataframe(df, table_id, job_config=job_config)
+        job.result()  # Wait for job to complete
+        
+        logger.info(f"Uploaded {len(df)} lists to {table_id}")
+
+
+class BigQueryTasksManager:
+    """Manages BigQuery operations for ClickUp tasks data."""
+    
+    def __init__(self, project_id: str, dataset: str, tasks_table: str):
+        self.project_id = project_id
+        self.dataset = dataset
+        self.tasks_table = tasks_table
+        self.client = bigquery.Client(project=project_id)
+    
+    def ensure_dataset_exists(self):
+        """Ensure the dataset exists."""
+        dataset_id = f"{self.project_id}.{self.dataset}"
+        try:
+            self.client.get_dataset(dataset_id)
+            logger.info(f"Dataset {dataset_id} already exists")
+        except NotFound:
+            dataset = bigquery.Dataset(dataset_id)
+            dataset.location = "US"
+            dataset = self.client.create_dataset(dataset, timeout=30)
+            logger.info(f"Created dataset {dataset_id}")
+    
+    def create_tasks_table_if_not_exists(self):
+        """Create tasks table if it doesn't exist."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.tasks_table}"
+        
+        try:
+            self.client.get_table(table_id)
+            logger.info(f"Tasks table {table_id} already exists")
+        except NotFound:
+            schema = [
+                bigquery.SchemaField("space_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("space_name", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("folder_id", "STRING"),
+                bigquery.SchemaField("folder_name", "STRING"),
+                bigquery.SchemaField("list_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("list_name", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("task_name", "STRING"),
+                bigquery.SchemaField("status", "STRING"),
+                bigquery.SchemaField("time_estimate_hrs", "FLOAT"),
+                bigquery.SchemaField("url", "STRING"),
+                bigquery.SchemaField("closed", "BOOLEAN"),
+                bigquery.SchemaField("archived", "BOOLEAN"),
+            ]
+            
+            table = bigquery.Table(table_id, schema=schema)
+            table = self.client.create_table(table)
+            logger.info(f"Created tasks table {table_id}")
+    
+    def upload_tasks(self, df: pd.DataFrame):
+        """Upload tasks DataFrame to BigQuery, replacing all existing data."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.tasks_table}"
+        
+        job_config = bigquery.LoadJobConfig(
+            write_disposition="WRITE_TRUNCATE"  # Replace all data
+        )
+        
+        job = self.client.load_table_from_dataframe(df, table_id, job_config=job_config)
+        job.result()  # Wait for job to complete
+        
+        logger.info(f"Uploaded {len(df)} tasks to {table_id}")
 
 
 class BigQueryManager:
@@ -538,6 +942,113 @@ class BigQueryManager:
             table = bigquery.Table(table_id, schema=schema)
             table = self.client.create_table(table)
             logger.info(f"Created fact table {table_id}")
+
+
+def sync_lists_to_bigquery():
+    """Fetch ClickUp lists and sync to BigQuery."""
+    clickup_token = os.getenv('CLICKUP_TOKEN')
+    team_id = os.getenv('TEAM_ID')
+    project_id = os.getenv('PROJECT_ID', 'nettsmed-internal')
+    dataset = os.getenv('DATASET', 'clickup_data')
+    lists_table = os.getenv('LISTS_TABLE', 'dim_lists')
+    
+    if not clickup_token:
+        logger.error("CLICKUP_TOKEN environment variable is required")
+        sys.exit(1)
+    
+    if not team_id:
+        logger.error("TEAM_ID environment variable is required")
+        sys.exit(1)
+    
+    logger.info("Starting ClickUp lists sync to BigQuery")
+    logger.info(f"Project: {project_id}, Dataset: {dataset}, Table: {lists_table}")
+    
+    try:
+        # Initialize components
+        fetcher = ClickUpListsFetcher(clickup_token, team_id)
+        bq_manager = BigQueryListsManager(project_id, dataset, lists_table)
+        
+        # Fetch lists
+        logger.info("Fetching lists from ClickUp...")
+        lists_data = fetcher.fetch_all_lists()
+        
+        if not lists_data:
+            logger.warning("No lists found")
+            return
+        
+        # Create DataFrame
+        df = pd.DataFrame(lists_data)
+        
+        # Save CSV for backup
+        csv_filename = f"clickup_lists_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        df.to_csv(csv_filename, index=False)
+        logger.info(f"Saved {len(df)} lists to {csv_filename}")
+        
+        # BigQuery operations
+        logger.info("Setting up BigQuery...")
+        bq_manager.ensure_dataset_exists()
+        bq_manager.create_lists_table_if_not_exists()
+        
+        logger.info("Uploading lists to BigQuery...")
+        bq_manager.upload_lists(df)
+        
+        logger.info("Lists sync completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Lists sync failed: {e}")
+        sys.exit(1)
+
+
+def sync_tasks_to_bigquery():
+    """Fetch ClickUp tasks and sync to BigQuery."""
+    clickup_token = os.getenv('CLICKUP_TOKEN')
+    space_id = os.getenv('SPACE_ID', '61463579')  # Billable work space
+    project_id = os.getenv('PROJECT_ID', 'nettsmed-internal')
+    dataset = os.getenv('DATASET', 'clickup_data')
+    tasks_table = os.getenv('TASKS_TABLE', 'dim_tasks')
+    
+    if not clickup_token:
+        logger.error("CLICKUP_TOKEN environment variable is required")
+        sys.exit(1)
+    
+    logger.info("Starting ClickUp tasks sync to BigQuery")
+    logger.info(f"Project: {project_id}, Dataset: {dataset}, Table: {tasks_table}")
+    logger.info(f"Space ID: {space_id}")
+    
+    try:
+        # Initialize components
+        fetcher = ClickUpTasksFetcher(clickup_token, space_id)
+        bq_manager = BigQueryTasksManager(project_id, dataset, tasks_table)
+        
+        # Fetch tasks
+        logger.info("Fetching tasks from ClickUp...")
+        tasks_data = fetcher.fetch_all_tasks()
+        
+        if not tasks_data:
+            logger.warning("No tasks found")
+            return
+        
+        # Create DataFrame
+        df = pd.DataFrame(tasks_data)
+        
+        # Save CSV for backup
+        csv_filename = f"clickup_tasks_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        df.to_csv(csv_filename, index=False)
+        logger.info(f"Saved {len(df)} tasks to {csv_filename}")
+        
+        # BigQuery operations
+        logger.info("Setting up BigQuery...")
+        bq_manager.ensure_dataset_exists()
+        bq_manager.create_tasks_table_if_not_exists()
+        
+        logger.info("Uploading tasks to BigQuery...")
+        bq_manager.upload_tasks(df)
+        
+        logger.info("Tasks sync completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Tasks sync failed: {e}")
+        sys.exit(1)
 
 
 def main():
