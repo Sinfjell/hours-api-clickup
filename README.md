@@ -80,6 +80,8 @@ curl -X POST https://your-service-url/sync/full_reindex
 curl -X POST https://your-service-url/sync/lists
 ```
 
+**Note:** Lists are automatically synced daily at 3 AM Oslo time via Cloud Scheduler.
+
 **Health check:**
 ```bash
 curl https://your-service-url/health

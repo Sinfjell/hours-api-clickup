@@ -169,7 +169,7 @@ def root():
         'schedule': {
             'refresh': 'Every 6 hours',
             'full_reindex': 'Quarterly (Jan 1, Apr 1, Jul 1, Oct 1)',
-            'lists': 'Weekly (Sundays at midnight)'
+            'lists': 'Daily at 3 AM (Oslo time)'
         }
     }), 200
 

@@ -21,7 +21,7 @@ Your ClickUp to BigQuery pipeline is now live on Google Cloud Run!
 
 ## ⏰ Scheduled Jobs
 
-### Job 1: Continuous Refresh
+### Job 1: Continuous Refresh (Time Entries)
 - **Name**: `clickup-refresh-6h`
 - **Schedule**: Every 6 hours (`0 */6 * * *`)
 - **Timezone**: Europe/Oslo
@@ -29,12 +29,20 @@ Your ClickUp to BigQuery pipeline is now live on Google Cloud Run!
 - **Mode**: Refresh (60 days lookback)
 - **Status**: ✅ ENABLED
 
-### Job 2: Quarterly Full Reindex
+### Job 2: Quarterly Full Reindex (Time Entries)
 - **Name**: `clickup-full-reindex-quarterly`
 - **Schedule**: 2 AM on 1st of Jan/Apr/Jul/Oct (`0 2 1 */3 *`)
 - **Timezone**: Europe/Oslo
 - **Next run**: January 1, 2026 at 2:00 AM
 - **Mode**: Full reindex (all data since 2024)
+- **Status**: ✅ ENABLED
+
+### Job 3: Daily Lists Sync
+- **Name**: `clickup-lists-sync-daily`
+- **Schedule**: Daily at 3 AM (`0 3 * * *`)
+- **Timezone**: Europe/Oslo
+- **Next run**: Tomorrow at 3:00 AM
+- **Mode**: Full lists replacement
 - **Status**: ✅ ENABLED
 
 ## ✅ Validation Results
