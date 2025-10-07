@@ -119,6 +119,35 @@ def sync_lists():
         }), 500
 
 
+@app.route('/sync/tasks', methods=['POST'])
+def sync_tasks():
+    """
+    Sync ClickUp tasks to BigQuery.
+    
+    This endpoint fetches ALL tasks (open, closed, archived, subtasks) from 
+    the configured ClickUp space and uploads them to BigQuery.
+    """
+    try:
+        logger.info("Starting tasks sync...")
+        
+        # Import and run sync function
+        from fetch_clickup_data import sync_tasks_to_bigquery
+        sync_tasks_to_bigquery()
+        
+        logger.info("Tasks sync completed successfully")
+        return jsonify({
+            'status': 'success',
+            'message': 'ClickUp tasks sync completed successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Tasks sync failed: {e}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """
@@ -160,6 +189,11 @@ def root():
                 'description': 'Sync all ClickUp lists (Space → Folder → List hierarchy)',
                 'use_case': 'Update list metadata (run when lists are added/removed/renamed)'
             },
+            '/sync/tasks': {
+                'method': 'POST',
+                'description': 'Sync all ClickUp tasks (open, closed, archived, subtasks)',
+                'use_case': 'Update task metadata (run when tasks change)'
+            },
             '/health': {
                 'method': 'GET',
                 'description': 'Health check endpoint',
@@ -169,7 +203,8 @@ def root():
         'schedule': {
             'refresh': 'Every 6 hours',
             'full_reindex': 'Quarterly (Jan 1, Apr 1, Jul 1, Oct 1)',
-            'lists': 'Daily at 3 AM (Oslo time)'
+            'lists': 'Daily at 3 AM (Oslo time)',
+            'tasks': 'Daily at 4 AM (Oslo time)'
         }
     }), 200
 

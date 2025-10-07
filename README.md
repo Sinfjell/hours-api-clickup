@@ -28,6 +28,12 @@ ClickUp's API only returns data for 30-day intervals, making it impossible to ge
 - **Folder-less Lists**: Handles lists directly under spaces
 - **Complete Replacement**: Each sync replaces all data with current state
 
+### Tasks
+- **All Task Types**: Fetches open, closed, and archived tasks
+- **Includes Subtasks**: Fetches subtasks along with parent tasks
+- **Pagination**: Handles large lists with proper pagination (100 tasks per page)
+- **Complete Replacement**: Each sync replaces all data with current state
+
 ### General
 - **Robust HTTP Handling**: Exponential backoff retry logic for 429/5xx errors
 - **Rate Limiting**: Built-in delays to respect API limits
@@ -80,7 +86,12 @@ curl -X POST https://your-service-url/sync/full_reindex
 curl -X POST https://your-service-url/sync/lists
 ```
 
-**Note:** Lists are automatically synced daily at 3 AM Oslo time via Cloud Scheduler.
+**Sync ClickUp tasks:**
+```bash
+curl -X POST https://your-service-url/sync/tasks
+```
+
+**Note:** Lists and tasks are automatically synced daily (3 AM and 4 AM Oslo time respectively) via Cloud Scheduler.
 
 **Health check:**
 ```bash
@@ -140,6 +151,7 @@ All arguments can also be set via environment variables in `.env` file.
 - **Time Entries Staging**: `nettsmed-internal.clickup_data.staging_time_entries`
 - **Time Entries Fact**: `nettsmed-internal.clickup_data.fact_time_entries`
 - **Lists Dimension**: `nettsmed-internal.clickup_data.dim_lists`
+- **Tasks Dimension**: `nettsmed-internal.clickup_data.dim_tasks`
 
 ### Data Transformations
 - **Timestamps**: Converted from milliseconds to UTC timestamps
@@ -165,6 +177,21 @@ All arguments can also be set via environment variables in `.env` file.
 - `folder_name`: Folder name (STRING, empty if folder-less)
 - `list_id`: List ID (STRING, REQUIRED)
 - `list_name`: List name (STRING, REQUIRED)
+
+**Tasks Table:**
+- `space_id`: Space ID (STRING, REQUIRED)
+- `space_name`: Space name (STRING, REQUIRED)
+- `folder_id`: Folder ID (STRING, empty if folder-less)
+- `folder_name`: Folder name (STRING, empty if folder-less)
+- `list_id`: List ID (STRING, REQUIRED)
+- `list_name`: List name (STRING, REQUIRED)
+- `task_id`: Task ID (STRING, REQUIRED)
+- `task_name`: Task name (STRING)
+- `status`: Task status (STRING)
+- `time_estimate_hrs`: Estimated hours (FLOAT)
+- `url`: ClickUp task URL (STRING)
+- `closed`: Whether task is closed (BOOLEAN)
+- `archived`: Whether task is archived (BOOLEAN)
 
 ## Output
 
