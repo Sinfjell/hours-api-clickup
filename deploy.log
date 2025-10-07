@@ -1,0 +1,74 @@
+🚀 Deploying ClickUp to BigQuery Pipeline to Cloud Run
+==================================================
+📋 Setting project: nettsmed-internal
+Updated property [core/project].
+📋 Enabling required APIs...
+📦 Creating Artifact Registry repository...
+✓ Repository already exists
+🔐 Configuring Docker authentication...
+WARNING: Your config file at [/Users/sinfjell/.docker/config.json] contains these credential helper entries:
+
+{
+  "credHelpers": {
+    "europe-north1-docker.pkg.dev": "gcloud",
+    "us-central1-docker.pkg.dev": "gcloud"
+  }
+}
+Adding credentials for: us-central1-docker.pkg.dev
+gcloud credential helpers already registered correctly.
+🔨 Building and deploying to Cloud Run...
+Creating temporary archive of 15 file(s) totalling 59.2 KiB before compression.
+Some files were not included in the source upload.
+
+Check the gcloud log [/Users/sinfjell/.config/gcloud/logs/2025.10.07/09.46.06.225687.log] to see which files and the contents of the
+default gcloudignore file used (see `$ gcloud topic gcloudignore` to learn
+more).
+
+Uploading tarball of [.] to [gs://nettsmed-internal_cloudbuild/source/1759823166.315064-3210963abb4f4c88a4ef74d593a93196.tgz]
+Created [https://cloudbuild.googleapis.com/v1/projects/nettsmed-internal/locations/global/builds/1a63fe0d-f2b2-457d-bd53-0e3092f3d726].
+Logs are available at [ https://console.cloud.google.com/cloud-build/builds/1a63fe0d-f2b2-457d-bd53-0e3092f3d726?project=541609152577 ].
+
+gcloud builds submit only displays logs from Cloud Storage. To view logs from Cloud Logging, run:
+gcloud beta builds submit
+
+Waiting for build to complete. Polling interval: 1 second(s).
+
+BUILD FAILURE: Build step failure: build step 2 "gcr.io/google.com/cloudsdktool/cloud-sdk" failed: step exited with non-zero status: 2
+ERROR: (gcloud.builds.submit) build 1a63fe0d-f2b2-457d-bd53-0e3092f3d726 completed with status "FAILURE"
+🚀 Deploying ClickUp to BigQuery Pipeline to Cloud Run
+==================================================
+📋 Setting project: nettsmed-internal
+Updated property [core/project].
+📋 Enabling required APIs...
+📦 Creating Artifact Registry repository...
+✓ Repository already exists
+🔐 Configuring Docker authentication...
+WARNING: Your config file at [/Users/sinfjell/.docker/config.json] contains these credential helper entries:
+
+{
+  "credHelpers": {
+    "europe-north1-docker.pkg.dev": "gcloud",
+    "us-central1-docker.pkg.dev": "gcloud"
+  }
+}
+Adding credentials for: us-central1-docker.pkg.dev
+gcloud credential helpers already registered correctly.
+🔨 Building and deploying to Cloud Run...
+Creating temporary archive of 15 file(s) totalling 61.1 KiB before compression.
+Some files were not included in the source upload.
+
+Check the gcloud log [/Users/sinfjell/.config/gcloud/logs/2025.10.07/09.49.12.321055.log] to see which files and the contents of the
+default gcloudignore file used (see `$ gcloud topic gcloudignore` to learn
+more).
+
+Uploading tarball of [.] to [gs://nettsmed-internal_cloudbuild/source/1759823352.401219-079de3b98ce141a3b13ef5e1e0887fda.tgz]
+Created [https://cloudbuild.googleapis.com/v1/projects/nettsmed-internal/locations/global/builds/a4a6307b-6c46-456b-9221-8a011275917e].
+Logs are available at [ https://console.cloud.google.com/cloud-build/builds/a4a6307b-6c46-456b-9221-8a011275917e?project=541609152577 ].
+
+gcloud builds submit only displays logs from Cloud Storage. To view logs from Cloud Logging, run:
+gcloud beta builds submit
+
+Waiting for build to complete. Polling interval: 1 second(s).
+
+BUILD FAILURE: Build step failure: build step 2 "gcr.io/google.com/cloudsdktool/cloud-sdk" failed: step exited with non-zero status: 2
+ERROR: (gcloud.builds.submit) build a4a6307b-6c46-456b-9221-8a011275917e completed with status "FAILURE"
