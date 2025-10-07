@@ -182,39 +182,6 @@ class ClickUpListsFetcher:
         except Exception as e:
             logger.error(f"Error fetching ClickUp lists: {e}")
             raise
-        
-    def _make_request(self, url: str, params: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
-        """Make HTTP request with exponential backoff retry logic."""
-        for attempt in range(max_retries + 1):
-            try:
-                response = self.session.get(url, params=params, timeout=30)
-                
-                if response.status_code == 200:
-                    return response.json()
-                elif response.status_code == 429:
-                    # Rate limited - wait and retry
-                    wait_time = 2 ** attempt
-                    logger.warning(f"Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
-                    time.sleep(wait_time)
-                    continue
-                elif response.status_code >= 500:
-                    # Server error - retry with backoff
-                    wait_time = 2 ** attempt
-                    logger.warning(f"Server error {response.status_code}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
-                    time.sleep(wait_time)
-                    continue
-                else:
-                    response.raise_for_status()
-                    
-            except requests.exceptions.RequestException as e:
-                if attempt == max_retries:
-                    logger.error(f"Request failed after {max_retries + 1} attempts: {e}")
-                    raise
-                wait_time = 2 ** attempt
-                logger.warning(f"Request failed: {e}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
-                time.sleep(wait_time)
-        
-        raise Exception(f"Request failed after {max_retries + 1} attempts")
     
     def fetch_time_entries_30day_chunk(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Fetch time entries for a 30-day chunk respecting ClickUp's API limitations."""
