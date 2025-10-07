@@ -1060,8 +1060,21 @@ class BigQueryAccountsManager:
         """Upload accounts DataFrame to BigQuery, replacing all existing data."""
         table_id = f"{self.project_id}.{self.dataset}.{self.accounts_table}"
         
+        # Define schema to ensure proper types (especially FLOAT for arr)
+        schema = [
+            bigquery.SchemaField("account_task_id", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("account_name", "STRING"),
+            bigquery.SchemaField("connected_list_id", "STRING"),
+            bigquery.SchemaField("hours_discount", "FLOAT"),
+            bigquery.SchemaField("status", "STRING"),
+            bigquery.SchemaField("date_created", "TIMESTAMP"),
+            bigquery.SchemaField("assignees", "STRING"),
+            bigquery.SchemaField("arr", "FLOAT"),
+        ]
+        
         job_config = bigquery.LoadJobConfig(
-            write_disposition="WRITE_TRUNCATE"  # Replace all data
+            write_disposition="WRITE_TRUNCATE",
+            schema=schema  # Explicitly set schema
         )
         
         job = self.client.load_table_from_dataframe(df, table_id, job_config=job_config)
@@ -1117,8 +1130,20 @@ class BigQueryAppsManager:
         """Upload apps DataFrame to BigQuery, replacing all existing data."""
         table_id = f"{self.project_id}.{self.dataset}.{self.apps_table}"
         
+        # Define schema to ensure proper types (especially FLOAT for arr)
+        schema = [
+            bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("application_name", "STRING"),
+            bigquery.SchemaField("account_task_ids", "STRING"),
+            bigquery.SchemaField("arr", "FLOAT"),
+            bigquery.SchemaField("last_updated", "TIMESTAMP"),
+            bigquery.SchemaField("status", "STRING"),
+            bigquery.SchemaField("maintenance", "BOOLEAN"),
+        ]
+        
         job_config = bigquery.LoadJobConfig(
-            write_disposition="WRITE_TRUNCATE"
+            write_disposition="WRITE_TRUNCATE",
+            schema=schema  # Explicitly set schema
         )
         
         job = self.client.load_table_from_dataframe(df, table_id, job_config=job_config)
