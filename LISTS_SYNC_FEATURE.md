@@ -67,7 +67,7 @@ Location: `bigquery_lists_table.sql`
 
 ## BigQuery Table
 
-**Table Name**: `nettsmed-internal.clickup_data.dim_clickup_lists`
+**Table Name**: `nettsmed-internal.clickup_data.dim_lists`
 
 **Location**: US
 
@@ -97,7 +97,7 @@ Uses existing environment variables:
 - `TEAM_ID` - Your team ID (37496228)
 - `PROJECT_ID` - BigQuery project (default: nettsmed-internal)
 - `DATASET` - BigQuery dataset (default: clickup_data)
-- `LISTS_TABLE` - Table name (default: dim_clickup_lists)
+- `LISTS_TABLE` - Table name (default: dim_lists)
 
 ## Testing Locally
 
@@ -146,7 +146,7 @@ Cloud Build will automatically deploy the new version with the `/sync/lists` end
 ### View all lists:
 ```sql
 SELECT * 
-FROM `nettsmed-internal.clickup_data.dim_clickup_lists` 
+FROM `nettsmed-internal.clickup_data.dim_lists` 
 ORDER BY space_name, folder_name, list_name;
 ```
 
@@ -160,7 +160,7 @@ SELECT
   l.folder_name,
   l.list_name
 FROM `nettsmed-internal.clickup_data.fact_time_entries` t
-LEFT JOIN `nettsmed-internal.clickup_data.dim_clickup_lists` l
+LEFT JOIN `nettsmed-internal.clickup_data.dim_lists` l
   ON t.task_location_list_id = l.list_id
 WHERE t.start_date_oslo >= '2024-01-01'
 ORDER BY t.start_date_oslo DESC;
@@ -192,7 +192,7 @@ ORDER BY t.start_date_oslo DESC;
 
 4. **Verify in BigQuery**:
    ```sql
-   SELECT COUNT(*) FROM `nettsmed-internal.clickup_data.dim_clickup_lists`;
+   SELECT COUNT(*) FROM `nettsmed-internal.clickup_data.dim_lists`;
    ```
 
 5. **Set up scheduled sync** (optional):

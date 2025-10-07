@@ -137,7 +137,7 @@ All arguments can also be set via environment variables in `.env` file.
 ### Tables Created
 - **Time Entries Staging**: `nettsmed-internal.clickup_data.staging_time_entries`
 - **Time Entries Fact**: `nettsmed-internal.clickup_data.fact_time_entries`
-- **Lists Dimension**: `nettsmed-internal.clickup_data.dim_clickup_lists`
+- **Lists Dimension**: `nettsmed-internal.clickup_data.dim_lists`
 
 ### Data Transformations
 - **Timestamps**: Converted from milliseconds to UTC timestamps

@@ -701,7 +701,7 @@ def sync_lists_to_bigquery():
     team_id = os.getenv('TEAM_ID')
     project_id = os.getenv('PROJECT_ID', 'nettsmed-internal')
     dataset = os.getenv('DATASET', 'clickup_data')
-    lists_table = os.getenv('LISTS_TABLE', 'dim_clickup_lists')
+    lists_table = os.getenv('LISTS_TABLE', 'dim_lists')
     
     if not clickup_token:
         logger.error("CLICKUP_TOKEN environment variable is required")
