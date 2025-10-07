@@ -5,8 +5,9 @@ Your ClickUp to BigQuery pipeline is now live on Google Cloud Run!
 ## 🌐 Service Information
 
 **Service Name**: `clickup-bigquery-sync`  
-**Region**: `europe-north1`  
-**Service URL**: `https://clickup-bigquery-sync-541609152577.europe-north1.run.app`  
+**Cloud Run Region**: `europe-north1` (Finland - closest to Norway)  
+**Scheduler Region**: `europe-west1` (Belgium - Cloud Scheduler limitation)  
+**Service URL**: `https://clickup-bigquery-sync-b3fljnwepq-lz.a.run.app`  
 **Status**: ✅ DEPLOYED
 
 ## 📊 Endpoints
@@ -161,4 +162,5 @@ Your ClickUp to BigQuery pipeline is now:
 
 **Deployment Date**: October 7, 2025  
 **Version**: 2.0.0  
+**Region**: Europe (Norway/Finland)  
 **Status**: PRODUCTION  
