@@ -5,6 +5,34 @@ All notable changes. Use semantic versioning (MAJOR.MINOR.PATCH):
 - **MINOR** (1.1.0): New features, backward compatible
 - **MAJOR** (2.0.0): Breaking changes, incompatible updates
 
+## [2.0.1] - 2025-10-07
+
+### 🌍 Region Migration
+
+#### Infrastructure Changes
+- **Migrated to Europe**: Moved from `us-central1` to `europe-north1` (Finland)
+- **Cloud Run**: Now deployed in `europe-north1` (closest to Norway)
+- **Cloud Scheduler**: Using `europe-west1` (Belgium - Scheduler doesn't support europe-north1)
+- **Artifact Registry**: Docker images stored in `europe-north1`
+
+#### Service Updates
+- **New Service URL**: `https://clickup-bigquery-sync-b3fljnwepq-lz.a.run.app`
+- **Region-specific Configuration**: Updated all deployment scripts and documentation
+- **Cleaned Up Old Resources**: Removed US region services and schedulers
+
+#### Documentation Updates
+- Updated all documentation files with Europe region information
+- Added region-specific deployment instructions
+- Updated Cloud Console monitoring links
+- Clarified scheduler region limitations
+
+### ✅ Deployment Status
+- ✅ Cloud Run service deployed in europe-north1
+- ✅ Cloud Scheduler jobs created in europe-west1
+- ✅ Old US resources cleaned up
+- ✅ Health checks passing
+- ✅ Manual test run successful (233 entries synced)
+
 ## [2.0.0] - 2025-10-07
 
 ### 🚀 Major Features Added

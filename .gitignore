@@ -24,3 +24,4 @@ Thumbs.db
 
 # Environment variables
 .env
+deploy.log

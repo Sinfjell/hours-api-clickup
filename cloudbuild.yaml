@@ -1,0 +1,50 @@
+steps:
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:v2.0.0'
+      - '-t'
+      - 'europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:latest'
+      - '.'
+  
+  # Push the container images
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync'
+  
+  # Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'clickup-bigquery-sync'
+      - '--image=europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:v2.0.0'
+      - '--region=europe-north1'
+      - '--platform=managed'
+      - '--no-allow-unauthenticated'
+      - '--memory=1Gi'
+      - '--cpu=1'
+      - '--timeout=900'
+      - '--max-instances=1'
+      - '--min-instances=0'
+      - '--set-env-vars=^:^CLICKUP_TOKEN=${_CLICKUP_TOKEN}:TEAM_ID=${_TEAM_ID}:ASSIGNEES=${_ASSIGNEES}:PROJECT_ID=${_PROJECT_ID}:DATASET=${_DATASET}:STAGING_TABLE=${_STAGING_TABLE}:FACT_TABLE=${_FACT_TABLE}'
+
+substitutions:
+  _CLICKUP_TOKEN: '55424762_44fc0fcb470696596dc4894e3aa4fd17a265af257f6048373acb9e1e877e7f8b'
+  _TEAM_ID: '37496228'
+  _ASSIGNEES: '55424762,55427758'
+  _PROJECT_ID: 'nettsmed-internal'
+  _DATASET: 'clickup_data'
+  _STAGING_TABLE: 'staging_time_entries'
+  _FACT_TABLE: 'fact_time_entries'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+timeout: 1200s

@@ -1,32 +1,40 @@
-# Documentation Index — [Project Name]
-_Last updated: YYYY-MM-DD_
+# Documentation Index — ClickUp to BigQuery Sync
+_Last updated: 2025-10-07_
 
 ## 📚 Documentation Overview
 
-This project includes comprehensive documentation to help developers understand, maintain, and extend the functionality.
+This project is a production-ready pipeline that syncs ClickUp time tracking data to Google BigQuery. It runs on Google Cloud Run with automated scheduling.
 
 ## 📖 Quick Links
 
 | Document | Purpose | Audience |
 |----------|---------|----------|
-| [Setup Guide](setup.md) | Installation & configuration | Clients, Admins, PMs |
-| [Technical Reference](reference.md) | Developer documentation | Developers |
-| [Changelog](changelog.md) | Version history | All users |
+| [Setup Guide](setup.md) | Deployment & configuration | DevOps, Admins |
+| [Technical Reference](reference.md) | API endpoints & architecture | Developers |
+| [Changelog](changelog.md) | Version history & updates | All users |
 
 ## 🚀 Getting Started
 
-1. **For Installation**: Start with [Setup Guide](setup.md)
+1. **For Deployment**: Start with [Setup Guide](setup.md)
 2. **For Development**: Read [Technical Reference](reference.md)
 3. **For Updates**: Check [Changelog](changelog.md)
 
-## 📋 Optional Documentation
+## 🌍 Current Deployment
 
-| Document | When to Use |
-|----------|-------------|
-| `api.md` | If project has many REST endpoints or complex external integrations |
-| `data.md` | If project has extensive database schemas or complex data relationships |
+- **Environment**: Production
+- **Version**: 2.0.0
+- **Cloud Run Region**: `europe-north1` (Finland)
+- **Scheduler Region**: `europe-west1` (Belgium)
+- **Service URL**: `https://clickup-bigquery-sync-b3fljnwepq-lz.a.run.app`
 
-**Note:** Most projects can keep all technical information in `reference.md`. Only create separate files when the content becomes unwieldy.
+## 📊 Key Features
+
+- ✅ Automated sync every 6 hours
+- ✅ Quarterly full reindex for data validation
+- ✅ Deployed on Google Cloud Run (serverless)
+- ✅ Secure authentication with OIDC tokens
+- ✅ Comprehensive logging and monitoring
+- ✅ Cost-optimized (~$1/month)
 
 ## 🎯 Documentation Standards
 
@@ -38,4 +46,4 @@ This project includes comprehensive documentation to help developers understand,
 
 ---
 
-**Purpose:** Overview/entry point combining setup + reference links
+**Purpose:** Overview/entry point for the ClickUp to BigQuery sync pipeline
