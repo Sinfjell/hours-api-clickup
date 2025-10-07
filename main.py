@@ -90,6 +90,35 @@ def sync_full_reindex():
         }), 500
 
 
+@app.route('/sync/lists', methods=['POST'])
+def sync_lists():
+    """
+    Sync ClickUp lists to BigQuery.
+    
+    This endpoint fetches all ClickUp lists (Space → Folder → List hierarchy)
+    and uploads them to BigQuery, replacing all existing data.
+    """
+    try:
+        logger.info("Starting lists sync...")
+        
+        # Import and run sync function
+        from fetch_clickup_data import sync_lists_to_bigquery
+        sync_lists_to_bigquery()
+        
+        logger.info("Lists sync completed successfully")
+        return jsonify({
+            'status': 'success',
+            'message': 'ClickUp lists sync completed successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Lists sync failed: {e}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """
@@ -118,13 +147,18 @@ def root():
         'endpoints': {
             '/sync/refresh': {
                 'method': 'POST',
-                'description': 'Sync last 60 days of data',
+                'description': 'Sync last 60 days of time entries',
                 'use_case': 'Regular scheduled updates'
             },
             '/sync/full_reindex': {
                 'method': 'POST',
-                'description': 'Full reindex since 2024',
+                'description': 'Full reindex of time entries since 2024',
                 'use_case': 'Quarterly validation or after data issues'
+            },
+            '/sync/lists': {
+                'method': 'POST',
+                'description': 'Sync all ClickUp lists (Space → Folder → List hierarchy)',
+                'use_case': 'Update list metadata (run when lists are added/removed/renamed)'
             },
             '/health': {
                 'method': 'GET',
@@ -134,7 +168,8 @@ def root():
         },
         'schedule': {
             'refresh': 'Every 6 hours',
-            'full_reindex': 'Quarterly (Jan 1, Apr 1, Jul 1, Oct 1)'
+            'full_reindex': 'Quarterly (Jan 1, Apr 1, Jul 1, Oct 1)',
+            'lists': 'Weekly (Sundays at midnight)'
         }
     }), 200
 
