@@ -40,6 +40,12 @@ ClickUp's API only returns data for 30-day intervals, making it impossible to ge
 - **From Specific List**: Fetches from configured accounts list (default: 901506402026)
 - **Complete Replacement**: Each sync replaces all data with current state
 
+### Applications
+- **Team-Level Fetch**: Fetches from team tasks filtered by custom_item_id 1005
+- **Custom Fields**: Extracts ARR, Last Updated, Maintenance, and Account relationships
+- **Relationship Handling**: Stores connected account task IDs as comma-separated string
+- **Complete Replacement**: Each sync replaces all data with current state
+
 ### General
 - **Robust HTTP Handling**: Exponential backoff retry logic for 429/5xx errors
 - **Rate Limiting**: Built-in delays to respect API limits
@@ -102,7 +108,12 @@ curl -X POST https://your-service-url/sync/tasks
 curl -X POST https://your-service-url/sync/accounts
 ```
 
-**Note:** Lists, tasks, and accounts are automatically synced daily (3 AM, 4 AM, and 5 AM Oslo time respectively) via Cloud Scheduler.
+**Sync ClickUp applications:**
+```bash
+curl -X POST https://your-service-url/sync/apps
+```
+
+**Note:** Lists, tasks, accounts, and apps are automatically synced daily (3-6 AM Oslo time) via Cloud Scheduler.
 
 **Health check:**
 ```bash
@@ -164,6 +175,7 @@ All arguments can also be set via environment variables in `.env` file.
 - **Lists Dimension**: `nettsmed-internal.clickup_data.dim_lists`
 - **Tasks Dimension**: `nettsmed-internal.clickup_data.dim_tasks`
 - **Accounts Dimension**: `nettsmed-internal.clickup_data.dim_accounts`
+- **Applications Dimension**: `nettsmed-internal.clickup_data.dim_apps`
 
 ### Data Transformations
 - **Timestamps**: Converted from milliseconds to UTC timestamps
@@ -214,6 +226,15 @@ All arguments can also be set via environment variables in `.env` file.
 - `date_created`: When account was created (TIMESTAMP)
 - `assignees`: Assigned users (STRING)
 - `arr`: Annual Recurring Revenue (FLOAT)
+
+**Applications Table:**
+- `task_id`: Application task ID (STRING, REQUIRED)
+- `application_name`: Application/software name (STRING)
+- `account_task_ids`: Comma-separated connected account IDs (STRING)
+- `arr`: Annual Recurring Revenue (FLOAT)
+- `last_updated`: Last update timestamp (TIMESTAMP)
+- `status`: Application status (STRING)
+- `maintenance`: Whether under maintenance (BOOLEAN)
 
 ## Output
 

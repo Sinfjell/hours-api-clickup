@@ -525,6 +525,156 @@ class ClickUpAccountsFetcher:
         except Exception as e:
             logger.error(f"Error fetching ClickUp accounts: {e}")
             raise
+
+
+class ClickUpAppsFetcher:
+    """Fetches Application tasks from team level, filtered by custom_item_id."""
+    
+    def __init__(self, token: str, team_id: str,
+                 arr_cf_id: str, last_updated_cf_id: str, 
+                 maintenance_cf_id: str, accounts_rel_cf_id: str):
+        self.token = token
+        self.team_id = team_id
+        self.arr_cf_id = arr_cf_id
+        self.last_updated_cf_id = last_updated_cf_id
+        self.maintenance_cf_id = maintenance_cf_id
+        self.accounts_rel_cf_id = accounts_rel_cf_id
+        self.base_url = "https://api.clickup.com/api/v2"
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Authorization': token,
+            'Content-Type': 'application/json'
+        })
+    
+    def _make_request(self, url: str, max_retries: int = 3) -> Dict[str, Any]:
+        """Make HTTP request with exponential backoff retry logic."""
+        for attempt in range(max_retries + 1):
+            try:
+                response = self.session.get(url, timeout=30)
+                
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                elif response.status_code >= 500:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Server error {response.status_code}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    response.raise_for_status()
+                    
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    logger.error(f"Request failed after {max_retries + 1} attempts: {e}")
+                    raise
+                wait_time = 2 ** attempt
+                logger.warning(f"Request failed: {e}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                time.sleep(wait_time)
+        
+        raise Exception(f"Request failed after {max_retries + 1} attempts")
+    
+    def fetch_all_apps(self) -> List[Dict[str, Any]]:
+        """
+        Fetch all Application tasks from team (custom_item_id === 1005).
+        
+        Returns a list of dictionaries with application information.
+        """
+        all_apps = []
+        page = 0
+        
+        try:
+            logger.info(f"Fetching Application tasks from team {self.team_id}...")
+            
+            while True:
+                time.sleep(0.3)  # Rate limiting
+                
+                url = (
+                    f"{self.base_url}/team/{self.team_id}/task"
+                    f"?include_closed=true&subtasks=true&page={page}"
+                )
+                
+                data = self._make_request(url)
+                tasks = data.get('tasks', [])
+                
+                if not tasks:
+                    break
+                
+                # Filter for Application tasks (custom_item_id === 1005)
+                app_tasks = [t for t in tasks if t.get('custom_item_id') == 1005]
+                
+                logger.info(f"Fetched page {page}: {len(tasks)} total, {len(app_tasks)} Application tasks")
+                
+                # Process each application task
+                for task in app_tasks:
+                    # Build lookup for custom fields
+                    fields_by_id = {}
+                    for field in task.get('custom_fields', []):
+                        fields_by_id[field.get('id')] = field
+                    
+                    # Extract custom field values
+                    # ARR (currency/numeric)
+                    arr_field = fields_by_id.get(self.arr_cf_id, {})
+                    arr_value = arr_field.get('value')
+                    if arr_value is not None and not isinstance(arr_value, str):
+                        try:
+                            arr_value = float(arr_value)
+                        except (ValueError, TypeError):
+                            arr_value = None
+                    
+                    # Last Updated (epoch ms -> datetime)
+                    last_updated_field = fields_by_id.get(self.last_updated_cf_id, {})
+                    last_updated_raw = last_updated_field.get('value')
+                    last_updated = None
+                    if last_updated_raw:
+                        try:
+                            last_updated = pd.to_datetime(int(last_updated_raw), unit='ms', utc=True)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Maintenance (checkbox true/false)
+                    maintenance_field = fields_by_id.get(self.maintenance_cf_id, {})
+                    maintenance_value = maintenance_field.get('value')
+                    maintenance = maintenance_value == 'true' if maintenance_value else False
+                    
+                    # Accounts Relationship (array of linked tasks)
+                    accounts_field = fields_by_id.get(self.accounts_rel_cf_id, {})
+                    accounts_value = accounts_field.get('value', [])
+                    account_task_ids = ''
+                    if isinstance(accounts_value, list):
+                        account_ids = [str(x.get('id')) for x in accounts_value if x.get('id')]
+                        account_task_ids = ', '.join(account_ids)
+                    
+                    # Base data for the task
+                    task_id = str(task.get('id', ''))
+                    task_name = task.get('name', '')
+                    status = task.get('status', {}).get('status', '')
+                    
+                    all_apps.append({
+                        'task_id': task_id,
+                        'application_name': task_name,
+                        'account_task_ids': account_task_ids,
+                        'arr': arr_value,
+                        'last_updated': last_updated,
+                        'status': status,
+                        'maintenance': maintenance
+                    })
+                
+                page += 1
+                
+                # Break if we got less than 100 tasks (last page)
+                if len(tasks) < 100:
+                    break
+            
+            logger.info(f"Total Application tasks fetched: {len(all_apps)}")
+            return all_apps
+            
+        except Exception as e:
+            logger.error(f"Error fetching ClickUp applications: {e}")
+            raise
     
     def fetch_time_entries_30day_chunk(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
         """Fetch time entries for a 30-day chunk respecting ClickUp's API limitations."""
@@ -914,6 +1064,63 @@ class BigQueryAccountsManager:
         job.result()  # Wait for job to complete
         
         logger.info(f"Uploaded {len(df)} account rows to {table_id}")
+
+
+class BigQueryAppsManager:
+    """Manages BigQuery operations for ClickUp applications data."""
+    
+    def __init__(self, project_id: str, dataset: str, apps_table: str):
+        self.project_id = project_id
+        self.dataset = dataset
+        self.apps_table = apps_table
+        self.client = bigquery.Client(project=project_id)
+    
+    def ensure_dataset_exists(self):
+        """Ensure the dataset exists."""
+        dataset_id = f"{self.project_id}.{self.dataset}"
+        try:
+            self.client.get_dataset(dataset_id)
+            logger.info(f"Dataset {dataset_id} already exists")
+        except NotFound:
+            dataset = bigquery.Dataset(dataset_id)
+            dataset.location = "US"
+            dataset = self.client.create_dataset(dataset, timeout=30)
+            logger.info(f"Created dataset {dataset_id}")
+    
+    def create_apps_table_if_not_exists(self):
+        """Create apps table if it doesn't exist."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.apps_table}"
+        
+        try:
+            self.client.get_table(table_id)
+            logger.info(f"Apps table {table_id} already exists")
+        except NotFound:
+            schema = [
+                bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("application_name", "STRING"),
+                bigquery.SchemaField("account_task_ids", "STRING"),
+                bigquery.SchemaField("arr", "FLOAT"),
+                bigquery.SchemaField("last_updated", "TIMESTAMP"),
+                bigquery.SchemaField("status", "STRING"),
+                bigquery.SchemaField("maintenance", "BOOLEAN"),
+            ]
+            
+            table = bigquery.Table(table_id, schema=schema)
+            table = self.client.create_table(table)
+            logger.info(f"Created apps table {table_id}")
+    
+    def upload_apps(self, df: pd.DataFrame):
+        """Upload apps DataFrame to BigQuery, replacing all existing data."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.apps_table}"
+        
+        job_config = bigquery.LoadJobConfig(
+            write_disposition="WRITE_TRUNCATE"
+        )
+        
+        job = self.client.load_table_from_dataframe(df, table_id, job_config=job_config)
+        job.result()
+        
+        logger.info(f"Uploaded {len(df)} applications to {table_id}")
 
 
 class BigQueryManager:
@@ -1321,6 +1528,69 @@ def sync_accounts_to_bigquery():
         
     except Exception as e:
         logger.error(f"Accounts sync failed: {e}")
+        sys.exit(1)
+
+
+def sync_apps_to_bigquery():
+    """Fetch ClickUp applications and sync to BigQuery."""
+    clickup_token = os.getenv('CLICKUP_TOKEN')
+    team_id = os.getenv('TEAM_ID')
+    arr_cf_id = os.getenv('ARR_CF_ID', '93ed8859-06ad-4909-938c-70b6f4c8352a')
+    last_updated_cf_id = os.getenv('LAST_UPDATED_CF_ID', '203398a3-0a22-47b2-9ab9-8b838032f58e')
+    maintenance_cf_id = os.getenv('MAINTENANCE_CF_ID', '1a9472e3-46e0-4cd3-88c5-587efaab0320')
+    accounts_rel_cf_id = os.getenv('ACCOUNTS_REL_CF_ID', '9ac424ac-f78f-47ab-89c0-9b5540fee5c5')
+    project_id = os.getenv('PROJECT_ID', 'nettsmed-internal')
+    dataset = os.getenv('DATASET', 'clickup_data')
+    apps_table = os.getenv('APPS_TABLE', 'dim_apps')
+    
+    if not clickup_token:
+        logger.error("CLICKUP_TOKEN environment variable is required")
+        sys.exit(1)
+    
+    if not team_id:
+        logger.error("TEAM_ID environment variable is required")
+        sys.exit(1)
+    
+    logger.info("Starting ClickUp applications sync to BigQuery")
+    logger.info(f"Project: {project_id}, Dataset: {dataset}, Table: {apps_table}")
+    logger.info(f"Team ID: {team_id}")
+    
+    try:
+        # Initialize components
+        fetcher = ClickUpAppsFetcher(
+            clickup_token, team_id,
+            arr_cf_id, last_updated_cf_id, maintenance_cf_id, accounts_rel_cf_id
+        )
+        bq_manager = BigQueryAppsManager(project_id, dataset, apps_table)
+        
+        # Fetch apps
+        logger.info("Fetching applications from ClickUp...")
+        apps_data = fetcher.fetch_all_apps()
+        
+        if not apps_data:
+            logger.warning("No applications found")
+            return
+        
+        # Create DataFrame
+        df = pd.DataFrame(apps_data)
+        
+        # Save CSV for backup
+        csv_filename = f"clickup_apps_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        df.to_csv(csv_filename, index=False)
+        logger.info(f"Saved {len(df)} applications to {csv_filename}")
+        
+        # BigQuery operations
+        logger.info("Setting up BigQuery...")
+        bq_manager.ensure_dataset_exists()
+        bq_manager.create_apps_table_if_not_exists()
+        
+        logger.info("Uploading applications to BigQuery...")
+        bq_manager.upload_apps(df)
+        
+        logger.info("Applications sync completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Applications sync failed: {e}")
         sys.exit(1)
 
 

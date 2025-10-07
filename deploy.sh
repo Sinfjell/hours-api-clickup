@@ -123,6 +123,18 @@ gcloud scheduler jobs create http clickup-accounts-sync-daily \
     --description="Sync ClickUp accounts daily at 5 AM" \
     2>/dev/null || echo "  ✓ Accounts sync scheduler already exists"
 
+# Scheduler 6: Daily apps sync
+echo "  Creating apps sync scheduler (daily)..."
+gcloud scheduler jobs create http clickup-apps-sync-daily \
+    --location=$SCHEDULER_REGION \
+    --schedule="0 6 * * *" \
+    --uri="${SERVICE_URL}/sync/apps" \
+    --http-method=POST \
+    --oidc-service-account-email=clickup-scheduler@${PROJECT_ID}.iam.gserviceaccount.com \
+    --time-zone="Europe/Oslo" \
+    --description="Sync ClickUp applications daily at 6 AM" \
+    2>/dev/null || echo "  ✓ Apps sync scheduler already exists"
+
 echo ""
 echo "🎉 Deployment Complete!"
 echo "=================================================="
@@ -134,6 +146,7 @@ echo "  - POST $SERVICE_URL/sync/full_reindex"
 echo "  - POST $SERVICE_URL/sync/lists"
 echo "  - POST $SERVICE_URL/sync/tasks"
 echo "  - POST $SERVICE_URL/sync/accounts"
+echo "  - POST $SERVICE_URL/sync/apps"
 echo "  - GET  $SERVICE_URL/health"
 echo ""
 echo "Schedulers:"
@@ -142,12 +155,14 @@ echo "  - Quarterly (Jan/Apr/Jul/Oct 1st at 2 AM): clickup-full-reindex-quarterl
 echo "  - Daily at 3 AM: clickup-lists-sync-daily"
 echo "  - Daily at 4 AM: clickup-tasks-sync-daily"
 echo "  - Daily at 5 AM: clickup-accounts-sync-daily"
+echo "  - Daily at 6 AM: clickup-apps-sync-daily"
 echo ""
 echo "📊 Test the service:"
 echo "  gcloud scheduler jobs run clickup-refresh-6h --location=$SCHEDULER_REGION"
 echo "  gcloud scheduler jobs run clickup-lists-sync-daily --location=$SCHEDULER_REGION"
 echo "  gcloud scheduler jobs run clickup-tasks-sync-daily --location=$SCHEDULER_REGION"
 echo "  gcloud scheduler jobs run clickup-accounts-sync-daily --location=$SCHEDULER_REGION"
+echo "  gcloud scheduler jobs run clickup-apps-sync-daily --location=$SCHEDULER_REGION"
 echo ""
 echo "📝 View logs:"
 echo "  gcloud run services logs read $SERVICE_NAME --region=$REGION --limit=50"
