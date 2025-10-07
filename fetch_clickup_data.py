@@ -473,14 +473,16 @@ class ClickUpAccountsFetcher:
                     else:
                         hours_discount = 0.0
                     
-                    # ARR (numeric/currency)
+                    # ARR (numeric/currency) - convert to float
                     arr_field = fields_by_id.get(self.arr_cf_id, {})
                     arr_value = arr_field.get('value')
-                    if arr_value is not None and not isinstance(arr_value, str):
+                    if arr_value is not None:
                         try:
                             arr_value = float(arr_value)
                         except (ValueError, TypeError):
                             arr_value = None
+                    else:
+                        arr_value = None
                     
                     # Base data for the task
                     task_id = str(task.get('id', ''))
@@ -616,14 +618,16 @@ class ClickUpAppsFetcher:
                         fields_by_id[field.get('id')] = field
                     
                     # Extract custom field values
-                    # ARR (currency/numeric)
+                    # ARR (currency/numeric) - convert to float
                     arr_field = fields_by_id.get(self.arr_cf_id, {})
                     arr_value = arr_field.get('value')
-                    if arr_value is not None and not isinstance(arr_value, str):
+                    if arr_value is not None:
                         try:
                             arr_value = float(arr_value)
                         except (ValueError, TypeError):
                             arr_value = None
+                    else:
+                        arr_value = None
                     
                     # Last Updated (epoch ms -> datetime)
                     last_updated_field = fields_by_id.get(self.last_updated_cf_id, {})
