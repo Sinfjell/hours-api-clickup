@@ -5,6 +5,7 @@ set -e
 # Configuration
 PROJECT_ID="nettsmed-internal"
 REGION="europe-north1"
+SCHEDULER_REGION="europe-west1"  # Cloud Scheduler doesn't support europe-north1
 SERVICE_NAME="clickup-bigquery-sync"
 REPOSITORY="clickup-pipeline"
 
@@ -65,7 +66,7 @@ echo "⏰ Creating Cloud Scheduler jobs..."
 # Scheduler 1: Every 6 hours (refresh 60 days)
 echo "  Creating refresh scheduler (every 6 hours)..."
 gcloud scheduler jobs create http clickup-refresh-6h \
-    --location=$REGION \
+    --location=$SCHEDULER_REGION \
     --schedule="0 */6 * * *" \
     --uri="${SERVICE_URL}/sync/refresh" \
     --http-method=POST \
@@ -77,7 +78,7 @@ gcloud scheduler jobs create http clickup-refresh-6h \
 # Scheduler 2: Quarterly (full reindex)
 echo "  Creating full reindex scheduler (quarterly)..."
 gcloud scheduler jobs create http clickup-full-reindex-quarterly \
-    --location=$REGION \
+    --location=$SCHEDULER_REGION \
     --schedule="0 2 1 */3 *" \
     --uri="${SERVICE_URL}/sync/full_reindex" \
     --http-method=POST \
@@ -101,7 +102,7 @@ echo "  - Every 6 hours: clickup-refresh-6h"
 echo "  - Quarterly (Jan/Apr/Jul/Oct 1st at 2 AM): clickup-full-reindex-quarterly"
 echo ""
 echo "📊 Test the service:"
-echo "  gcloud scheduler jobs run clickup-refresh-6h --location=$REGION"
+echo "  gcloud scheduler jobs run clickup-refresh-6h --location=$SCHEDULER_REGION"
 echo ""
 echo "📝 View logs:"
 echo "  gcloud run services logs read $SERVICE_NAME --region=$REGION --limit=50"
