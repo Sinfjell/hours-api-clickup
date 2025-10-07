@@ -178,6 +178,35 @@ def sync_accounts():
         }), 500
 
 
+@app.route('/sync/apps', methods=['POST'])
+def sync_apps():
+    """
+    Sync ClickUp applications to BigQuery.
+    
+    This endpoint fetches Application tasks (custom_item_id 1005) from team level
+    with custom fields (ARR, Last Updated, Maintenance, Account relationships).
+    """
+    try:
+        logger.info("Starting applications sync...")
+        
+        # Import and run sync function
+        from fetch_clickup_data import sync_apps_to_bigquery
+        sync_apps_to_bigquery()
+        
+        logger.info("Applications sync completed successfully")
+        return jsonify({
+            'status': 'success',
+            'message': 'ClickUp applications sync completed successfully'
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Applications sync failed: {e}", exc_info=True)
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """
@@ -229,6 +258,11 @@ def root():
                 'description': 'Sync ClickUp accounts with custom fields (Connected Lists, Hours Discount, ARR)',
                 'use_case': 'Update account/customer metadata'
             },
+            '/sync/apps': {
+                'method': 'POST',
+                'description': 'Sync ClickUp applications (custom_item_id 1005) with custom fields',
+                'use_case': 'Update application/software metadata'
+            },
             '/health': {
                 'method': 'GET',
                 'description': 'Health check endpoint',
@@ -240,7 +274,8 @@ def root():
             'full_reindex': 'Quarterly (Jan 1, Apr 1, Jul 1, Oct 1)',
             'lists': 'Daily at 3 AM (Oslo time)',
             'tasks': 'Daily at 4 AM (Oslo time)',
-            'accounts': 'Daily at 5 AM (Oslo time)'
+            'accounts': 'Daily at 5 AM (Oslo time)',
+            'apps': 'Daily at 6 AM (Oslo time)'
         }
     }), 200
 
