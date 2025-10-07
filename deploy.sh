@@ -4,7 +4,7 @@ set -e
 
 # Configuration
 PROJECT_ID="nettsmed-internal"
-REGION="us-central1"
+REGION="europe-north1"
 SERVICE_NAME="clickup-bigquery-sync"
 REPOSITORY="clickup-pipeline"
 

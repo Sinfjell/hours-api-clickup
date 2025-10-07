@@ -4,9 +4,9 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:v2.0.0'
+      - 'europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:v2.0.0'
       - '-t'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:latest'
+      - 'europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:latest'
       - '.'
   
   # Push the container images
@@ -14,7 +14,7 @@ steps:
     args:
       - 'push'
       - '--all-tags'
-      - 'us-central1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync'
+      - 'europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync'
   
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -23,8 +23,8 @@ steps:
       - 'run'
       - 'deploy'
       - 'clickup-bigquery-sync'
-      - '--image=us-central1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:v2.0.0'
-      - '--region=us-central1'
+      - '--image=europe-north1-docker.pkg.dev/$PROJECT_ID/clickup-pipeline/sync:v2.0.0'
+      - '--region=europe-north1'
       - '--platform=managed'
       - '--no-allow-unauthenticated'
       - '--memory=1Gi'

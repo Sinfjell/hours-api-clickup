@@ -5,8 +5,8 @@ Your ClickUp to BigQuery pipeline is now live on Google Cloud Run!
 ## 🌐 Service Information
 
 **Service Name**: `clickup-bigquery-sync`  
-**Region**: `us-central1`  
-**Service URL**: `https://clickup-bigquery-sync-541609152577.us-central1.run.app`  
+**Region**: `europe-north1`  
+**Service URL**: `https://clickup-bigquery-sync-541609152577.europe-north1.run.app`  
 **Status**: ✅ DEPLOYED
 
 ## 📊 Endpoints
@@ -79,27 +79,27 @@ Your ClickUp to BigQuery pipeline is now live on Google Cloud Run!
 
 ### View Service Details
 ```bash
-gcloud run services describe clickup-bigquery-sync --region=us-central1
+gcloud run services describe clickup-bigquery-sync --region=europe-north1
 ```
 
 ### View Logs (Live)
 ```bash
-gcloud run services logs read clickup-bigquery-sync --region=us-central1 --limit=100
+gcloud run services logs read clickup-bigquery-sync --region=europe-north1 --limit=100
 ```
 
 ### View Scheduler Jobs
 ```bash
-gcloud scheduler jobs list --location=us-central1
+gcloud scheduler jobs list --location=europe-north1
 ```
 
 ### Manual Trigger Refresh
 ```bash
-gcloud scheduler jobs run clickup-refresh-6h --location=us-central1
+gcloud scheduler jobs run clickup-refresh-6h --location=europe-north1
 ```
 
 ### Manual Trigger Full Reindex
 ```bash
-gcloud scheduler jobs run clickup-full-reindex-quarterly --location=us-central1
+gcloud scheduler jobs run clickup-full-reindex-quarterly --location=europe-north1
 ```
 
 ### Update Service (after code changes)
@@ -121,7 +121,7 @@ FROM `nettsmed-internal.clickup_data.fact_time_entries`;
 ## 🔍 Monitoring
 
 ### Cloud Console Links
-- **Cloud Run Service**: https://console.cloud.google.com/run/detail/us-central1/clickup-bigquery-sync?project=nettsmed-internal
+- **Cloud Run Service**: https://console.cloud.google.com/run/detail/europe-north1/clickup-bigquery-sync?project=nettsmed-internal
 - **Cloud Scheduler**: https://console.cloud.google.com/cloudscheduler?project=nettsmed-internal
 - **Cloud Build**: https://console.cloud.google.com/cloud-build/builds?project=nettsmed-internal
 - **BigQuery Dataset**: https://console.cloud.google.com/bigquery?project=nettsmed-internal&d=clickup_data
