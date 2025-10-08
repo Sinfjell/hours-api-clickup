@@ -50,6 +50,101 @@ class ClickUpDataFetcher:
             'Authorization': f'Bearer {token}',
             'Content-Type': 'application/json'
         })
+        
+    def _make_request(self, url: str, params: Dict[str, Any], max_retries: int = 3) -> Dict[str, Any]:
+        """Make HTTP request with exponential backoff retry logic."""
+        for attempt in range(max_retries + 1):
+            try:
+                response = self.session.get(url, params=params, timeout=30)
+                
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 429:
+                    # Rate limited - wait and retry
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Rate limited. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                elif response.status_code >= 500:
+                    # Server error - retry with backoff
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Server error {response.status_code}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    response.raise_for_status()
+                    
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    logger.error(f"Request failed after {max_retries + 1} attempts: {e}")
+                    raise
+                wait_time = 2 ** attempt
+                logger.warning(f"Request failed: {e}. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                time.sleep(wait_time)
+        
+        raise Exception(f"Request failed after {max_retries + 1} attempts")
+    
+    def fetch_time_entries_30day_chunk(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """Fetch time entries for a 30-day chunk respecting ClickUp's API limitations."""
+        all_entries = []
+        
+        # Convert to milliseconds since epoch
+        start_ms = int(start_date.timestamp() * 1000)
+        end_ms = int(end_date.timestamp() * 1000)
+        
+        # Prepare assignees parameter
+        assignees_param = ','.join(self.assignees) if self.assignees else None
+        
+        params = {
+            'start_date': start_ms,
+            'end_date': end_ms,
+            'assignee': assignees_param
+        }
+        
+        url = f"{self.base_url}/team/{self.team_id}/time_entries"
+        
+        try:
+            logger.info(f"Fetching time entries from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+            
+            # Add small delay between requests to respect rate limits
+            time.sleep(0.5)
+            
+            data = self._make_request(url, params)
+            entries = data.get('data', [])
+            
+            logger.info(f"Found {len(entries)} entries for this chunk")
+            all_entries.extend(entries)
+            
+        except Exception as e:
+            logger.error(f"Error fetching data for chunk {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}: {e}")
+            raise
+        
+        return all_entries
+    
+    def fetch_all_time_entries(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
+        """Fetch all time entries using 30-day chunks."""
+        all_entries = []
+        current_start = start_date
+        
+        while current_start < end_date:
+            # Calculate chunk end (30 days from current start)
+            chunk_end = min(current_start + timedelta(days=30), end_date)
+            
+            try:
+                chunk_entries = self.fetch_time_entries_30day_chunk(current_start, chunk_end)
+                all_entries.extend(chunk_entries)
+                
+                # Move to next chunk
+                current_start = chunk_end
+                
+            except Exception as e:
+                logger.error(f"Failed to fetch chunk {current_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')}: {e}")
+                # Continue with next chunk instead of failing completely
+                current_start = chunk_end
+                continue
+        
+        logger.info(f"Total entries fetched: {len(all_entries)}")
+        return all_entries
 
 
 class ClickUpListsFetcher:
@@ -679,68 +774,6 @@ class ClickUpAppsFetcher:
         except Exception as e:
             logger.error(f"Error fetching ClickUp applications: {e}")
             raise
-    
-    def fetch_time_entries_30day_chunk(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
-        """Fetch time entries for a 30-day chunk respecting ClickUp's API limitations."""
-        all_entries = []
-        
-        # Convert to milliseconds since epoch
-        start_ms = int(start_date.timestamp() * 1000)
-        end_ms = int(end_date.timestamp() * 1000)
-        
-        # Prepare assignees parameter
-        assignees_param = ','.join(self.assignees) if self.assignees else None
-        
-        params = {
-            'start_date': start_ms,
-            'end_date': end_ms,
-            'assignee': assignees_param
-        }
-        
-        url = f"{self.base_url}/team/{self.team_id}/time_entries"
-        
-        try:
-            logger.info(f"Fetching time entries from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
-            
-            # Add small delay between requests to respect rate limits
-            time.sleep(0.5)
-            
-            data = self._make_request(url, params)
-            entries = data.get('data', [])
-            
-            logger.info(f"Found {len(entries)} entries for this chunk")
-            all_entries.extend(entries)
-            
-        except Exception as e:
-            logger.error(f"Error fetching data for chunk {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}: {e}")
-            raise
-        
-        return all_entries
-    
-    def fetch_all_time_entries(self, start_date: datetime, end_date: datetime) -> List[Dict[str, Any]]:
-        """Fetch all time entries using 30-day chunks."""
-        all_entries = []
-        current_start = start_date
-        
-        while current_start < end_date:
-            # Calculate chunk end (30 days from current start)
-            chunk_end = min(current_start + timedelta(days=30), end_date)
-            
-            try:
-                chunk_entries = self.fetch_time_entries_30day_chunk(current_start, chunk_end)
-                all_entries.extend(chunk_entries)
-                
-                # Move to next chunk
-                current_start = chunk_end
-                
-            except Exception as e:
-                logger.error(f"Failed to fetch chunk {current_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')}: {e}")
-                # Continue with next chunk instead of failing completely
-                current_start = chunk_end
-                continue
-        
-        logger.info(f"Total entries fetched: {len(all_entries)}")
-        return all_entries
 
 
 class DataTransformer:
