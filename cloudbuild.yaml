@@ -37,7 +37,7 @@ steps:
 substitutions:
   _CLICKUP_TOKEN: '55424762_44fc0fcb470696596dc4894e3aa4fd17a265af257f6048373acb9e1e877e7f8b'
   _TEAM_ID: '37496228'
-  _ASSIGNEES: '55424762,55427758'
+  _ASSIGNEES: '55424762,55427758,88552909'
   _PROJECT_ID: 'nettsmed-internal'
   _DATASET: 'clickup_data'
   _STAGING_TABLE: 'staging_time_entries'

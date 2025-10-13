@@ -41,7 +41,7 @@ The script will:
 ### Environment Variables (in Cloud Run)
 - `CLICKUP_TOKEN`: ClickUp API token
 - `TEAM_ID`: ClickUp team ID (37496228)
-- `ASSIGNEES`: Comma-separated user IDs (55424762,55427758)
+- `ASSIGNEES`: Comma-separated user IDs (55424762,55427758,88552909)
 - `PROJECT_ID`: GCP project ID (nettsmed-internal)
 - `DATASET`: BigQuery dataset (clickup_data)
 - `STAGING_TABLE`: BigQuery staging table (staging_time_entries)

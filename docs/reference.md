@@ -32,7 +32,7 @@ pip install -r requirements.txt
 ```env
 CLICKUP_TOKEN=your_token_here
 TEAM_ID=37496228
-ASSIGNEES=55424762,55427758
+ASSIGNEES=55424762,55427758,88552909
 PROJECT_ID=nettsmed-internal
 DATASET=clickup_data
 STAGING_TABLE=staging_time_entries
