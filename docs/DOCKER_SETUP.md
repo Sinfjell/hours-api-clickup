@@ -44,7 +44,7 @@ docker run --env-file .env -p 8080:8080 clickup-bigquery-pipeline:latest
 docker run \
   -e CLICKUP_TOKEN=55424762_44fc0fcb470696596dc4894e3aa4fd17a265af257f6048373acb9e1e877e7f8b \
   -e TEAM_ID=37496228 \
-  -e ASSIGNEES=55424762,55427758 \
+  -e ASSIGNEES=55424762,55427758,88552909 \
   -e PROJECT_ID=nettsmed-internal \
   -e DATASET=clickup_data \
   -e STAGING_TABLE=staging_time_entries \
