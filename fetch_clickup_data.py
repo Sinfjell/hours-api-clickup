@@ -1370,7 +1370,25 @@ class BigQueryManager:
           task_location_space_id = S.task_location_space_id,
           start_date_oslo = S.start_date_oslo
         WHEN NOT MATCHED THEN
-          INSERT ROW
+          INSERT (
+            id, start_utc, end_utc, duration_ms, duration_hours, billable, description,
+            source, `at`, is_locked, approval_id, task_url, task_id, task_name,
+            task_custom_type, task_custom_id, task_status_status, task_status_color,
+            task_status_type, task_status_orderindex, user_id, user_username, user_email,
+            user_email_sha256, user_color, user_initials, user_profilePicture,
+            task_location_list_id, task_location_folder_id, task_location_space_id,
+            start_date_oslo
+          )
+          VALUES (
+            S.id, S.start_utc, S.end_utc, S.duration_ms, S.duration_hours, S.billable,
+            S.description, S.source, S.`at`, S.is_locked, S.approval_id, S.task_url,
+            S.task_id, S.task_name, S.task_custom_type, S.task_custom_id,
+            S.task_status_status, S.task_status_color, S.task_status_type,
+            S.task_status_orderindex, S.user_id, S.user_username, S.user_email,
+            S.user_email_sha256, S.user_color, S.user_initials, S.user_profilePicture,
+            S.task_location_list_id, S.task_location_folder_id, S.task_location_space_id,
+            S.start_date_oslo
+          )
         WHEN NOT MATCHED BY SOURCE THEN
           DELETE;
         """
