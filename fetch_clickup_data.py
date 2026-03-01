@@ -1120,10 +1120,11 @@ class BigQueryAccountsManager:
 class BigQueryAppsManager:
     """Manages BigQuery operations for ClickUp applications data."""
     
-    def __init__(self, project_id: str, dataset: str, apps_table: str):
+    def __init__(self, project_id: str, dataset: str, apps_table: str, snapshots_table: str = "fact_apps_snapshots"):
         self.project_id = project_id
         self.dataset = dataset
         self.apps_table = apps_table
+        self.snapshots_table = snapshots_table
         self.client = bigquery.Client(project=project_id)
     
     def ensure_dataset_exists(self):
@@ -1159,7 +1160,78 @@ class BigQueryAppsManager:
             table = bigquery.Table(table_id, schema=schema)
             table = self.client.create_table(table)
             logger.info(f"Created apps table {table_id}")
-    
+
+    def create_snapshots_table_if_not_exists(self):
+        """Create date-partitioned snapshots table if it doesn't exist."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.snapshots_table}"
+
+        try:
+            self.client.get_table(table_id)
+            logger.info(f"Snapshots table {table_id} already exists")
+        except NotFound:
+            schema = [
+                bigquery.SchemaField("snapshot_date", "DATE", mode="REQUIRED"),
+                bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+                bigquery.SchemaField("application_name", "STRING"),
+                bigquery.SchemaField("account_task_ids", "STRING"),
+                bigquery.SchemaField("arr", "FLOAT"),
+                bigquery.SchemaField("last_updated", "TIMESTAMP"),
+                bigquery.SchemaField("status", "STRING"),
+                bigquery.SchemaField("maintenance", "BOOLEAN"),
+            ]
+
+            table = bigquery.Table(table_id, schema=schema)
+            table.time_partitioning = bigquery.TimePartitioning(
+                type_=bigquery.TimePartitioningType.DAY,
+                field="snapshot_date",
+            )
+            table = self.client.create_table(table)
+            logger.info(f"Created snapshots table {table_id}")
+
+    def upload_snapshot(self, df: pd.DataFrame):
+        """Append a daily snapshot. Deletes existing rows for today first (idempotent)."""
+        table_id = f"{self.project_id}.{self.dataset}.{self.snapshots_table}"
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # Delete existing rows for today (idempotent re-runs)
+        delete_query = f"""
+            DELETE FROM `{table_id}`
+            WHERE snapshot_date = @today
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("today", "DATE", today),
+            ]
+        )
+        self.client.query(delete_query, job_config=job_config).result()
+        logger.info(f"Cleared existing snapshot rows for {today}")
+
+        # Add snapshot_date column as proper date type
+        snapshot_df = df.copy()
+        snapshot_df["snapshot_date"] = pd.Timestamp(today).date()
+
+        # Upload with WRITE_APPEND
+        schema = [
+            bigquery.SchemaField("snapshot_date", "DATE", mode="REQUIRED"),
+            bigquery.SchemaField("task_id", "STRING", mode="REQUIRED"),
+            bigquery.SchemaField("application_name", "STRING"),
+            bigquery.SchemaField("account_task_ids", "STRING"),
+            bigquery.SchemaField("arr", "FLOAT"),
+            bigquery.SchemaField("last_updated", "TIMESTAMP"),
+            bigquery.SchemaField("status", "STRING"),
+            bigquery.SchemaField("maintenance", "BOOLEAN"),
+        ]
+
+        load_config = bigquery.LoadJobConfig(
+            write_disposition="WRITE_APPEND",
+            schema=schema,
+        )
+
+        job = self.client.load_table_from_dataframe(snapshot_df, table_id, job_config=load_config)
+        job.result()
+
+        logger.info(f"Uploaded {len(snapshot_df)} snapshot rows for {today}")
+
     def upload_apps(self, df: pd.DataFrame):
         """Upload apps DataFrame to BigQuery, replacing all existing data."""
         table_id = f"{self.project_id}.{self.dataset}.{self.apps_table}"
@@ -1623,7 +1695,8 @@ def sync_apps_to_bigquery():
     project_id = os.getenv('PROJECT_ID', 'nettsmed-internal')
     dataset = os.getenv('DATASET', 'clickup_data')
     apps_table = os.getenv('APPS_TABLE', 'dim_apps')
-    
+    snapshots_table = os.getenv('APPS_SNAPSHOTS_TABLE', 'fact_apps_snapshots')
+
     if not clickup_token:
         logger.error("CLICKUP_TOKEN environment variable is required")
         sys.exit(1)
@@ -1642,7 +1715,7 @@ def sync_apps_to_bigquery():
             clickup_token, team_id,
             arr_cf_id, last_updated_cf_id, maintenance_cf_id, accounts_rel_cf_id
         )
-        bq_manager = BigQueryAppsManager(project_id, dataset, apps_table)
+        bq_manager = BigQueryAppsManager(project_id, dataset, apps_table, snapshots_table)
         
         # Fetch apps
         logger.info("Fetching applications from ClickUp...")
@@ -1664,10 +1737,12 @@ def sync_apps_to_bigquery():
         logger.info("Setting up BigQuery...")
         bq_manager.ensure_dataset_exists()
         bq_manager.create_apps_table_if_not_exists()
-        
+        bq_manager.create_snapshots_table_if_not_exists()
+
         logger.info("Uploading applications to BigQuery...")
         bq_manager.upload_apps(df)
-        
+        bq_manager.upload_snapshot(df)
+
         logger.info("Applications sync completed successfully!")
         
     except Exception as e:
