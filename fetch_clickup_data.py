@@ -691,7 +691,7 @@ class ClickUpAppsFetcher:
                 
                 url = (
                     f"{self.base_url}/team/{self.team_id}/task"
-                    f"?include_closed=true&subtasks=true&page={page}"
+                    f"?include_closed=true&subtasks=true&custom_items[]=1005&page={page}"
                 )
                 
                 data = self._make_request(url)
@@ -768,7 +768,8 @@ class ClickUpAppsFetcher:
                 if len(tasks) < 100:
                     break
             
-            logger.info(f"Total Application tasks fetched: {len(all_apps)}")
+            total_arr = sum(a.get('arr', 0) or 0 for a in all_apps)
+            logger.info(f"Total Application tasks fetched: {len(all_apps)}, Total ARR: {total_arr:.0f}")
             return all_apps
             
         except Exception as e:
