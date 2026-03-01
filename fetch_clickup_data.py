@@ -1205,9 +1205,9 @@ class BigQueryAppsManager:
         self.client.query(delete_query, job_config=job_config).result()
         logger.info(f"Cleared existing snapshot rows for {today}")
 
-        # Add snapshot_date column
+        # Add snapshot_date column as proper date type
         snapshot_df = df.copy()
-        snapshot_df["snapshot_date"] = today
+        snapshot_df["snapshot_date"] = pd.Timestamp(today).date()
 
         # Upload with WRITE_APPEND
         schema = [
