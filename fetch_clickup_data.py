@@ -17,6 +17,7 @@ import time
 import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional, Tuple
 from urllib.parse import urlencode
 
@@ -138,10 +139,15 @@ class ClickUpDataFetcher:
                 current_start = chunk_end
                 
             except Exception as e:
-                logger.error(f"Failed to fetch chunk {current_start.strftime('%Y-%m-%d')} to {chunk_end.strftime('%Y-%m-%d')}: {e}")
-                # Continue with next chunk instead of failing completely
-                current_start = chunk_end
-                continue
+                # Never continue past a failed chunk. In refresh mode the MERGE
+                # deletes fact rows that are absent from staging, so a swallowed
+                # chunk error silently destroys live data for that window.
+                # Failing loudly leaves the fact table untouched instead.
+                raise RuntimeError(
+                    f"Aborting sync: chunk {current_start.strftime('%Y-%m-%d')} to "
+                    f"{chunk_end.strftime('%Y-%m-%d')} failed. Refusing to MERGE "
+                    f"incomplete data."
+                ) from e
         
         logger.info(f"Total entries fetched: {len(all_entries)}")
         return all_entries
@@ -1343,8 +1349,47 @@ class BigQueryManager:
         
         logger.info(f"Uploaded {len(df_upload)} rows to staging table")
     
+    def assert_staging_covers_window(self, days: int, min_ratio: float = 0.9):
+        """Refuse to MERGE when staging looks too thin to be trusted.
+
+        merge_refresh_mode() deletes fact rows that are missing from staging, so
+        a partial fetch is indistinguishable from a batch of genuine deletions.
+        Comparing row counts inside the refresh window turns that silent data
+        loss into a failed run.
+        """
+        query = f"""
+        SELECT
+          (SELECT COUNT(*) FROM `{self.project_id}.{self.dataset}.{self.staging_table}`
+            WHERE start_date_oslo BETWEEN DATE_SUB(CURRENT_DATE("Europe/Oslo"), INTERVAL @days DAY)
+                                      AND CURRENT_DATE("Europe/Oslo")) AS staging_rows,
+          (SELECT COUNT(*) FROM `{self.project_id}.{self.dataset}.{self.fact_table}`
+            WHERE start_date_oslo BETWEEN DATE_SUB(CURRENT_DATE("Europe/Oslo"), INTERVAL @days DAY)
+                                      AND CURRENT_DATE("Europe/Oslo")) AS fact_rows
+        """
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("days", "INT64", days)]
+        )
+        row = list(self.client.query(query, job_config=job_config).result())[0]
+        staging_rows, fact_rows = row.staging_rows, row.fact_rows
+
+        logger.info(
+            f"Sanity check: staging has {staging_rows} rows in the {days}-day window, "
+            f"fact has {fact_rows}"
+        )
+
+        if fact_rows and staging_rows < fact_rows * min_ratio:
+            raise RuntimeError(
+                f"Aborting MERGE: staging has {staging_rows} rows in the {days}-day "
+                f"window but the fact table has {fact_rows} "
+                f"({staging_rows / fact_rows:.0%} < {min_ratio:.0%}). Proceeding would "
+                f"delete up to {fact_rows - staging_rows} live time entries. "
+                f"Investigate the ClickUp fetch before re-running."
+            )
+
     def merge_refresh_mode(self, days: int):
         """Execute MERGE in refresh mode with windowed delete."""
+        self.assert_staging_covers_window(days)
+
         query = f"""
         DECLARE refresh_days INT64 DEFAULT @days;
 
@@ -1824,8 +1869,21 @@ def main():
         end_date = datetime.now(timezone.utc)
         
         if args.mode == 'refresh':
-            start_date = end_date - timedelta(days=args.days)
-            logger.info(f"Refresh mode: fetching last {args.days} days")
+            # The MERGE deletes fact rows by CALENDAR DAY in Europe/Oslo, so the
+            # fetch has to cover whole Oslo days too. Starting at `now - N days`
+            # left the earliest day only partially fetched, and every run then
+            # deleted the entries logged before that time of day — permanently,
+            # since the day falls out of the window tomorrow. Floor to midnight
+            # Oslo and take one extra day of margin; the MERGE is idempotent, so
+            # over-fetching costs nothing.
+            oslo_midnight = (
+                datetime.now(ZoneInfo("Europe/Oslo")) - timedelta(days=args.days + 1)
+            ).replace(hour=0, minute=0, second=0, microsecond=0)
+            start_date = oslo_midnight.astimezone(timezone.utc)
+            logger.info(
+                f"Refresh mode: fetching last {args.days} days "
+                f"(from {start_date.isoformat()}, floored to Oslo midnight + 1 day margin)"
+            )
         else:  # full_reindex
             start_date = datetime(2024, 1, 1, tzinfo=timezone.utc)
             logger.info("Full reindex mode: fetching all data since 2024-01-01")
